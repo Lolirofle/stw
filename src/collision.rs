@@ -34,9 +34,9 @@ pub struct ProximityMessage;
 impl ProximityHandler<Point2<f32>,Isometry2<f32>,ObjectData> for ProximityMessage{
 	fn handle_proximity(&mut self,co1: &CollisionObject2<f32,ObjectData>,co2: &CollisionObject2<f32,ObjectData>,_: Proximity,new_proximity: Proximity){
 		if new_proximity == Proximity::Intersecting{
-			println!("Intersection start: {:?} , {:?}",co1.position,co2.position);
+			//println!("Intersection start: {:?} , {:?}",co1.position,co2.position);
 		}else if new_proximity == Proximity::Disjoint{
-			println!("Intersection stop: {:?} , {:?}",co1.position,co2.position);
+			//println!("Intersection stop: {:?} , {:?}",co1.position,co2.position);
 		}
 	}
 }
@@ -56,7 +56,7 @@ impl ContactHandler<Point2<f32>, Isometry2<f32>,ObjectData> for VelocityBouncer{
 		self.tmp_collector.clear();
 		alg.contacts(&mut self.tmp_collector);
 
-		println!("Contact start: {:?} {:?} {:?}",co1.position,co2.position,self.tmp_collector);
+		//println!("Contact start: {:?} {:?} {:?}",co1.position,co2.position,self.tmp_collector);
 
 		{
 			let normal = self.tmp_collector[0].normal;
@@ -68,6 +68,6 @@ impl ContactHandler<Point2<f32>, Isometry2<f32>,ObjectData> for VelocityBouncer{
 	}
 
 	fn handle_contact_stopped(&mut self,co1: &CollisionObject2<f32,ObjectData>,co2: &CollisionObject2<f32,ObjectData>){
-		println!("Contact stop: {:?} {:?}",co1.position,co2.position);
+		//println!("Contact stop: {:?} {:?}",co1.position,co2.position);
 	}
 }

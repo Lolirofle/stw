@@ -98,7 +98,7 @@ impl System<()> for PongSystem{
 			if position[0] - ball.size / 2. > right_bound{
 				position[0] = 0.;
 				score.score_left += 1;
-				println!("Left player score:{0}, Right player score: {1}",
+				println!("L: {0} ; R: {1}",
 					score.score_left,
 					score.score_right
 				);
@@ -108,7 +108,7 @@ impl System<()> for PongSystem{
 			if position[0] + ball.size / 2. < left_bound{
 				position[0] = 0.;
 				score.score_right += 1;
-				println!("Left player score:{0}, Right player score{1}",
+				println!("L: {0} ; R: {1}",
 					score.score_left,
 					score.score_right
 				);
