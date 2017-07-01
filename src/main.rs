@@ -8,32 +8,20 @@ use amethyst::ecs::{Gate, World, Join, RunArg, System};
 use amethyst::ecs::components::{Mesh, LocalTransform, Texture, Transform};
 use amethyst::gfx_device::DisplayConfig;
 use amethyst::renderer::{Pipeline, VertexPosNormal};
-use nalgebra::{Isometry2,Point2,Vector2,dot,zero};
-use ncollide::narrow_phase::{ProximityHandler,ContactHandler,ContactAlgorithm2};
-use ncollide::query::{Contact,Proximity};
+use nalgebra::{Isometry2,Vector2,zero};
 use ncollide::shape::{Plane,Ball,Cuboid,ShapeHandle2};
-use ncollide::world::{CollisionWorld2,CollisionGroups,GeometricQueryType,CollisionObject2};
+use ncollide::world::GeometricQueryType;
 use std::cell::Cell;
 
+mod collision;
 mod components;
 mod data;
+mod ncollide_ext;
 mod util;
 
 struct Score{
 	score_left: i32,
 	score_right: i32,
-}
-
-#[derive(Clone)]
-struct CollisionObjectData{
-	position: Cell<Vector2<f32>>,
-	velocity: Cell<Vector2<f32>>,
-}
-impl Default for CollisionObjectData{
-	fn default() -> Self{CollisionObjectData{
-		position: Cell::new(Vector2::new(0.0,0.0)),
-		velocity: Cell::new(Vector2::new(0.0,0.0)),
-	}}
 }
 
 //Pong game system
@@ -60,18 +48,10 @@ impl System<()> for PongSystem{
 		));
 
 		//Get left and right boundaries of the screen
-		let (left_bound, right_bound, top_bound, bottom_bound) = match camera.proj{
-			Projection::Orthographic{ left, right, top, bottom, .. } => (left, right, top, bottom),
-			_ => (1.0, 1.0, 1.0, 1.0),
+		let (left_bound,right_bound,_,_) = match camera.proj{
+			Projection::Orthographic{left,right,top,bottom,..} => (left,right,top,bottom),
+			_ => (1.0,1.0,1.0,1.0),
 		};
-
-		//Properties of left paddle.
-		let mut left_dimensions = Vector2::new(0.0,0.0);
-		let mut left_position = 0.0;
-
-		//Properties of right paddle.
-		let mut right_dimensions = Vector2::new(0.0,0.0);
-		let mut right_position = 0.0;
 
 		let delta_time = time.delta_time.subsec_nanos() as f32 / 1.0e9;
 
@@ -84,10 +64,6 @@ impl System<()> for PongSystem{
 			match plank.side{
 				//If it is a left plank
 				data::Side::Left =>{
-					//Store left plank position for later use in ball processing
-					left_position = position[1];
-					//Store left plank dimensions for later use in ball processing
-					left_dimensions = plank.dimensions;
 					//If `W` is pressed and plank is in screen boundaries then move up
 					if input.key_down(VirtualKeyCode::W){
 						*velocity = Vector2::new(0.0,3.0);
@@ -99,10 +75,6 @@ impl System<()> for PongSystem{
 				}
 				//If it is a right plank
 				data::Side::Right =>{
-					//Store right plank position for later use in ball processing
-					right_position = position[1];
-					//Store right plank dimensions for later use in ball processing
-					right_dimensions = plank.dimensions;
 					//If `Up` is pressed and plank is in screen boundaries then move down
 					if input.key_down(VirtualKeyCode::Up){
 						*velocity = Vector2::new(0.0,3.0);
@@ -121,7 +93,7 @@ impl System<()> for PongSystem{
 		}
 
 		//Process the ball
-		for (ref mut ball, &mut components::Position(ref mut position), &mut components::Velocity(ref mut velocity), ref mut local) in (&mut balls, &mut positions, &mut velocities, &mut locals).join(){
+		for (ref mut ball, &mut components::Position(ref mut position), ref mut local) in (&mut balls, &mut positions, &mut locals).join(){
 			//Check if the ball is to the left of the right boundary, if it is not reset it's position and score the left player
 			if position[0] - ball.size / 2. > right_bound{
 				position[0] = 0.;
@@ -160,14 +132,12 @@ impl System<()> for PongSystem{
 }
 
 struct Pong{
-	collision        : CollisionWorld2<f32,CollisionObjectData>,
-	collision_next_id: usize,
-	collision_group  : CollisionGroups
+	collision: collision::Collision,
 }
 impl Pong{
 	fn gen_collision_id(&mut self) -> usize{
-		let id = self.collision_next_id;
-		self.collision_next_id+= 1;
+		let id = self.collision.next_id;
+		self.collision.next_id+= 1;
 		id
 	}
 }
@@ -224,28 +194,44 @@ impl State for Pong{
 		assets.load_asset_from_data::<Mesh, Vec<VertexPosNormal>>("square", square_verts);
 		let square = assets.create_renderable("square", "white", "white", "white", 1.0).unwrap();
 
-		//Initialize collision checking
-		let contacts_query  = GeometricQueryType::Contacts(0.0);
-		let proximity_query = GeometricQueryType::Proximity(0.0);
-
 		//Add borders to the collision checking
 		{
 			let plane = ShapeHandle2::new(Plane::new(Vector2::y()));
 			let pos   = Vector2::new(0.0,-1.0);
 			let id    = self.gen_collision_id();
-			self.collision.deferred_add(id,Isometry2::new(pos,zero()),plane,self.collision_group,contacts_query,CollisionObjectData{position: Cell::new(pos),..CollisionObjectData::default()});
+			self.collision.world.deferred_add(
+				id,
+				Isometry2::new(pos,zero()),
+				plane,
+				self.collision.group,
+				GeometricQueryType::Contacts(0.0),
+				collision::ObjectData{
+					position: Cell::new(pos),
+					..collision::ObjectData::default()
+				}
+			);
 		}
 
 		{
 			let plane = ShapeHandle2::new(Plane::new(-Vector2::y()));
 			let pos   = Vector2::new(0.0,1.0);
 			let id    = self.gen_collision_id();
-			self.collision.deferred_add(id,Isometry2::new(pos,zero()),plane,self.collision_group,contacts_query,CollisionObjectData{position: Cell::new(pos),..CollisionObjectData::default()});
+			self.collision.world.deferred_add(
+				id,
+				Isometry2::new(pos,zero()),
+				plane,
+				self.collision.group,
+				GeometricQueryType::Contacts(0.0),
+				collision::ObjectData{
+					position: Cell::new(pos),
+					..collision::ObjectData::default()
+				}
+			);
 		}
 
-		//Register our handlers.
-		self.collision.register_proximity_handler("ProximityMessage", ProximityMessage);
-		self.collision.register_contact_handler("VelocityBouncer", VelocityBouncer::new());
+		//Register handlers.
+		self.collision.world.register_proximity_handler("ProximityMessage", collision::ProximityMessage);
+		self.collision.world.register_contact_handler("VelocityBouncer", collision::VelocityBouncer::new());
 
 		//Create a ball entity
 		{
@@ -260,16 +246,16 @@ impl State for Pong{
 				.with(components::Velocity(vel))
 				.with(components::Collision({
 					let id = self.gen_collision_id();
-					self.collision.deferred_add(
+					self.collision.world.deferred_add(
 						id,
 						Isometry2::new(pos,zero()),
 						shape,
-						self.collision_group,
+						self.collision.group,
 						GeometricQueryType::Contacts(0.0),
-						CollisionObjectData{
+						collision::ObjectData{
 							position: Cell::new(pos),
 							velocity: Cell::new(vel),
-							..CollisionObjectData::default()
+							..collision::ObjectData::default()
 						}
 					);
 					id
@@ -295,16 +281,16 @@ impl State for Pong{
 				.with(components::Velocity(vel))
 				.with(components::Collision({
 					let id = self.gen_collision_id();
-					self.collision.deferred_add(
+					self.collision.world.deferred_add(
 						id,
 						Isometry2::new(pos,zero()),
 						shape,
-						self.collision_group,
+						self.collision.group,
 						GeometricQueryType::Contacts(0.0),
-						CollisionObjectData{
+						collision::ObjectData{
 							position: Cell::new(pos),
 							velocity: Cell::new(vel),
-							..CollisionObjectData::default()
+							..collision::ObjectData::default()
 						}
 					);
 					id
@@ -330,16 +316,16 @@ impl State for Pong{
 				.with(components::Velocity(vel))
 				.with(components::Collision({
 					let id = self.gen_collision_id();
-					self.collision.deferred_add(
+					self.collision.world.deferred_add(
 						id,
 						Isometry2::new(pos,zero()),
 						shape,
-						self.collision_group,
+						self.collision.group,
 						GeometricQueryType::Contacts(0.0),
-						CollisionObjectData{
+						collision::ObjectData{
 							position: Cell::new(pos),
 							velocity: Cell::new(vel),
-							..CollisionObjectData::default()
+							..collision::ObjectData::default()
 						}
 					);
 					id
@@ -376,17 +362,17 @@ impl State for Pong{
 		let     objs       = world.read::<components::Collision>().pass();
 
 		for(&components::Collision(obj_id),&mut components::Position(position)) in (&objs,&mut positions).join(){
-			self.collision.deferred_set_position(obj_id,Isometry2::new(position,zero()));
+			self.collision.world.deferred_set_position(obj_id,Isometry2::new(position,zero()));
 		}
 
-		self.collision.update();
+		self.collision.world.update();
 
 		for(
 			&components::Collision(obj_id),
 			&mut components::Position(ref mut position),
 			&mut components::Velocity(ref mut velocity)
 		) in (&objs,&mut positions,&mut velocities).join(){
-			if let Some(obj) = self.collision.collision_object(obj_id){
+			if let Some(obj) = self.collision.world.collision_object(obj_id){
 				position[0] = obj.position.translation.vector[0];
 				position[1] = obj.position.translation.vector[1];
 
@@ -399,55 +385,11 @@ impl State for Pong{
 	}
 }
 
-struct ProximityMessage;
-impl ProximityHandler<Point2<f32>,Isometry2<f32>,CollisionObjectData> for ProximityMessage{
-	fn handle_proximity(&mut self,co1: &CollisionObject2<f32,CollisionObjectData>,co2: &CollisionObject2<f32,CollisionObjectData>,_: Proximity,new_proximity: Proximity){
-		if new_proximity == Proximity::Intersecting{
-			println!("Intersection start: {:?} , {:?}",co1.position,co2.position);
-		}else if new_proximity == Proximity::Disjoint{
-			println!("Intersection stop: {:?} , {:?}",co1.position,co2.position);
-		}
-	}
-}
-
-struct VelocityBouncer{
-	tmp_collector: Vec<Contact<Point2<f32>>>
-}
-impl VelocityBouncer{
-	pub fn new() -> Self{
-		VelocityBouncer{
-			tmp_collector: Vec::new()
-		}
-	}
-}
-impl ContactHandler<Point2<f32>, Isometry2<f32>,CollisionObjectData> for VelocityBouncer{
-	fn handle_contact_started(&mut self,co1: &CollisionObject2<f32,CollisionObjectData>,co2: &CollisionObject2<f32,CollisionObjectData>,alg: &ContactAlgorithm2<f32>){
-		self.tmp_collector.clear();
-		alg.contacts(&mut self.tmp_collector);
-
-		println!("Contact start: {:?} {:?} {:?}",co1.position,co2.position,self.tmp_collector);
-
-		{
-			let normal = self.tmp_collector[0].normal;
-			co1.data.velocity.set(co1.data.velocity.get() - 2.0*dot(&co1.data.velocity.get(),&normal)*normal);
-		}{
-			let normal = -self.tmp_collector[0].normal;
-			co2.data.velocity.set(co2.data.velocity.get() - 2.0*dot(&co2.data.velocity.get(),&normal)*normal);
-		}
-	}
-
-	fn handle_contact_stopped(&mut self,co1: &CollisionObject2<f32,CollisionObjectData>,co2: &CollisionObject2<f32,CollisionObjectData>){
-		println!("Contact stop: {:?} {:?}",co1.position,co2.position);
-	}
-}
-
 fn main(){
 	let cfg = DisplayConfig::default();
 	let mut game = Application::build(
 		Pong{
-			collision        : CollisionWorld2::new(0.02,true),
-			collision_next_id: 0,
-			collision_group  : CollisionGroups::new(), //Every object is part of this group and interacts with everything
+			collision: collision::Collision::new(),
 		},
 		cfg
 	)
