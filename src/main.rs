@@ -15,53 +15,9 @@ use ncollide::shape::{Plane,Ball,Cuboid,ShapeHandle2};
 use ncollide::world::{CollisionWorld2,CollisionGroups,GeometricQueryType,CollisionObject2};
 use std::cell::Cell;
 
-mod data{
-	pub enum Side{
-		Left,
-		Right,
-	}
-}
-
-mod components{
-	use amethyst::ecs::{VecStorage,Component};
-	use nalgebra::Vector2;
-	use ncollide::shape::ShapeHandle2;
-
-	pub struct Object{
-		position: Vector2<f32>,
-		shape: ShapeHandle2<f32>
-	}
-
-	pub struct Position(pub Vector2<f32>);
-	impl Component for Position{
-		type Storage = VecStorage<Position>;
-	}
-
-	pub struct Velocity(pub Vector2<f32>);
-	impl Component for Velocity{
-		type Storage = VecStorage<Velocity>;
-	}
-
-	pub struct Collision(pub usize);
-	impl Component for Collision{
-		type Storage = VecStorage<Collision>;
-	}
-
-	pub struct Ball{
-		pub size: f32,
-	}
-	impl Component for Ball{
-		type Storage = VecStorage<Ball>;
-	}
-
-	pub struct Plank{
-		pub dimensions: Vector2<f32>,
-		pub side: ::data::Side,
-	}
-	impl Component for Plank{
-		type Storage = VecStorage<Plank>;
-	}
-}
+mod components;
+mod data;
+mod util;
 
 struct Score{
 	score_left: i32,
@@ -134,15 +90,11 @@ impl System<()> for PongSystem{
 					left_dimensions = plank.dimensions;
 					//If `W` is pressed and plank is in screen boundaries then move up
 					if input.key_down(VirtualKeyCode::W){
-						/*if position[1] + plank.dimensions[1] / 2. < 1.*/{
-							*velocity = Vector2::new(0.0,1.0);
-						}
+						*velocity = Vector2::new(0.0,3.0);
 					}
 					//If `S` is pressed and plank is in screen boundaries then move down
 					if input.key_down(VirtualKeyCode::S){
-						/*if position[1] - plank.dimensions[1] / 2. > -1.*/{
-							*velocity = Vector2::new(0.0,-1.0);
-						}
+						*velocity = Vector2::new(0.0,-3.0);
 					}
 				}
 				//If it is a right plank
@@ -153,15 +105,11 @@ impl System<()> for PongSystem{
 					right_dimensions = plank.dimensions;
 					//If `Up` is pressed and plank is in screen boundaries then move down
 					if input.key_down(VirtualKeyCode::Up){
-						/*if position[1] + plank.dimensions[1] / 2. < top_bound*/{
-							*velocity = Vector2::new(0.0,1.0);
-						}
+						*velocity = Vector2::new(0.0,3.0);
 					}
 					//If `Down` is pressed and plank is in screen boundaries then move down
 					if input.key_down(VirtualKeyCode::Down){
-						/*if position[1] - plank.dimensions[1] / 2. > bottom_bound*/{
-							*velocity = Vector2::new(0.0,-1.0);
-						}
+						*velocity = Vector2::new(0.0,-3.0);
 					}
 				}
 			};
@@ -174,34 +122,14 @@ impl System<()> for PongSystem{
 
 		//Process the ball
 		for (ref mut ball, &mut components::Position(ref mut position), &mut components::Velocity(ref mut velocity), ref mut local) in (&mut balls, &mut positions, &mut velocities, &mut locals).join(){
-/*
-			//Check if the ball has collided with the right plank
-			if position[0] + ball.size / 2. > right_bound - left_dimensions[0] &&
-			   position[0] + ball.size / 2. < right_bound{
-				if position[1] - ball.size / 2. < right_position + right_dimensions[1] / 2. &&
-				   position[1] + ball.size / 2. > right_position - right_dimensions[1] / 2.{
-					position[0] = right_bound - right_dimensions[0] - ball.size / 2.;
-					velocity[0] = -velocity[0];
-				}
-			}
-
-			//Check if the ball has collided with the left plank
-			if position[0] - ball.size / 2. < left_bound + left_dimensions[0] &&
-			   position[0] + ball.size / 2. > left_bound{
-				if position[1] - ball.size / 2. < left_position + left_dimensions[1] / 2. &&
-				   position[1] + ball.size / 2. > left_position - left_dimensions[1] / 2.{
-					position[0] = left_bound + left_dimensions[0] + ball.size / 2.;
-					velocity[0] = -velocity[0];
-				}
-			}
-*/
 			//Check if the ball is to the left of the right boundary, if it is not reset it's position and score the left player
 			if position[0] - ball.size / 2. > right_bound{
 				position[0] = 0.;
 				score.score_left += 1;
 				println!("Left player score:{0}, Right player score: {1}",
-						 score.score_left,
-						 score.score_right);
+					score.score_left,
+					score.score_right
+				);
 			}
 
 			//Check if the ball is to the right of the left boundary, if it is not reset it's position and score the right player
@@ -209,22 +137,11 @@ impl System<()> for PongSystem{
 				position[0] = 0.;
 				score.score_right += 1;
 				println!("Left player score:{0}, Right player score{1}",
-						 score.score_left,
-						 score.score_right);
-			}
-/*
-			//Check if the ball is below the top boundary, if it is not deflect it
-			if position[1] + ball.size / 2. > top_bound{
-				position[1] = top_bound - ball.size / 2.;
-				velocity[1] = -velocity[1];
+					score.score_left,
+					score.score_right
+				);
 			}
 
-			//Check if the ball is above the bottom boundary, if it is not deflect it
-			if position[1] - ball.size / 2. < bottom_bound{
-				position[1] = bottom_bound + ball.size / 2.;
-				velocity[1] = -velocity[1];
-			}
-*/
 			//Update the renderable corresponding to this ball
 			local.translation[0] = position[0];
 			local.translation[1] = position[1];
@@ -303,7 +220,7 @@ impl State for Pong{
 		assets.register_asset::<Mesh>();
 		assets.register_asset::<Texture>();
 		assets.load_asset_from_data::<Texture, [f32; 4]>("white", [1.0, 1.0, 1.0, 1.0]);
-		let square_verts = gen_rectangle(1.0, 1.0);
+		let square_verts = util::gen_rectangle(1.0, 1.0);
 		assets.load_asset_from_data::<Mesh, Vec<VertexPosNormal>>("square", square_verts);
 		let square = assets.create_renderable("square", "white", "white", "white", 1.0).unwrap();
 
@@ -334,7 +251,7 @@ impl State for Pong{
 		{
 			let ball  = components::Ball{size: 0.1};
 			let pos   = Vector2::new(0.0,0.0);
-			let vel   = Vector2::new(1.0,1.0);
+			let vel   = Vector2::new(2.0,2.0);
 			let shape = ShapeHandle2::new(Ball::new(0.1f32));
 			world.create_now()
 				.with(square.clone())
@@ -542,39 +459,4 @@ fn main(){
 		.with::<PongSystem>(PongSystem, "pong_system", 1)
 		.done();
 	game.run();
-}
-
-fn gen_rectangle(w: f32,h: f32) -> Vec<VertexPosNormal>{
-	vec![
-		VertexPosNormal{
-			pos: [-w / 2., -h / 2., 0.],
-			normal: [0., 0., 1.],
-			tex_coord: [0., 0.],
-		},
-		VertexPosNormal{
-			pos: [w / 2., -h / 2., 0.],
-			normal: [0., 0., 1.],
-			tex_coord: [1., 0.],
-		},
-		VertexPosNormal{
-			pos: [w / 2., h / 2., 0.],
-			normal: [0., 0., 1.],
-			tex_coord: [1., 1.],
-		},
-		VertexPosNormal{
-			pos: [w / 2., h / 2., 0.],
-			normal: [0., 0., 1.],
-			tex_coord: [1., 1.],
-		},
-		VertexPosNormal{
-			pos: [-w / 2., h / 2., 0.],
-			normal: [0., 0., 1.],
-			tex_coord: [1., 1.],
-		},
-		VertexPosNormal{
-			pos: [-w / 2., -h / 2., 0.],
-			normal: [0., 0., 1.],
-			tex_coord: [1., 1.],
-		}
-	]
 }
