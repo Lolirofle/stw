@@ -16,7 +16,6 @@ use std::cell::Cell;
 mod collision;
 mod components;
 mod data;
-mod ncollide_ext;
 mod util;
 
 struct Score{
@@ -44,7 +43,7 @@ impl System<()> for PongSystem{
 				w.read_resource::<Time>(),
 				w.read_resource::<InputHandler>(),
 			),
-			w.write_resource::<Score>()
+			w.write_resource::<Score>(),
 		));
 
 		//Get left and right boundaries of the screen
@@ -361,6 +360,7 @@ impl State for Pong{
 		let mut velocities = world.write::<components::Velocity>().pass();
 		let     objs       = world.read::<components::Collision>().pass();
 
+		//TODO: Surely this much looping and copying cannot be efficient?
 		for(&components::Collision(obj_id),&mut components::Position(position)) in (&objs,&mut positions).join(){
 			self.collision.world.deferred_set_position(obj_id,Isometry2::new(position,zero()));
 		}

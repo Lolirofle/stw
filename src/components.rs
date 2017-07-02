@@ -1,11 +1,5 @@
 use amethyst::ecs::{VecStorage,Component};
 use nalgebra::Vector2;
-use ncollide::shape::ShapeHandle2;
-
-pub struct Object{
-	position: Vector2<f32>,
-	shape: ShapeHandle2<f32>
-}
 
 pub struct Position(pub Vector2<f32>);
 impl Component for Position{

@@ -6,4 +6,4 @@ authors = ["Lolirofle <lolipopple@hotmail.com>"]
 [dependencies]
 amethyst = "*"
 nalgebra = "*"
-ncollide = "*"
+ncollide = "*" #{path = "ncollide"}

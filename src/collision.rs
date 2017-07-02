@@ -17,7 +17,6 @@ impl Collision{
 	}}
 }
 
-
 #[derive(Clone)]
 pub struct ObjectData{
 	pub position: Cell<Vector2<f32>>,
