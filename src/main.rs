@@ -2,6 +2,11 @@ extern crate amethyst;
 extern crate nalgebra;
 extern crate ncollide;
 
+mod collision;
+mod components;
+mod data;
+mod util;
+
 use amethyst::{Application, Event, State, Trans, VirtualKeyCode, WindowEvent};
 use amethyst::asset_manager::AssetManager;
 use amethyst::ecs::{Gate, World, Join, RunArg, System};
@@ -13,10 +18,7 @@ use ncollide::shape::{Plane,Ball,Cuboid,ShapeHandle2};
 use ncollide::world::GeometricQueryType;
 use std::cell::Cell;
 
-mod collision;
-mod components;
-mod data;
-mod util;
+use collision::ObjectType;
 
 struct Score{
 	score_left: i32,
@@ -32,11 +34,11 @@ impl System<()> for PongSystem{
 		use amethyst::ecs::resources::{Camera, InputHandler, Projection, Time};
 
 		//Get all needed component storages and resources
-		let (mut balls, planks, positions, velocities, (locals, camera, time, input), mut score) = arg.fetch(|w| (
+		let (mut balls, planks, positions, collisions, (locals, camera, time, input), mut score) = arg.fetch(|w| (
 			w.write::<components::Ball>(),
 			w.write::<components::Plank>(),
 			w.write::<components::Position>(),
-			w.write::<components::Velocity>(),
+			w.write::<components::Collision>(),
 			(
 				w.write::<LocalTransform>(),
 				w.read_resource::<Camera>(),
@@ -48,18 +50,18 @@ impl System<()> for PongSystem{
 
 		//Get left and right boundaries of the screen
 		let (left_bound,right_bound,_,_) = match camera.proj{
-			Projection::Orthographic{left,right,top,bottom,..} => (left,right,top,bottom),
+			Projection::Orthographic{left,right,top,bottom,..} => (left as f64,right as f64,top as f64,bottom as f64),
 			_ => (1.0,1.0,1.0,1.0),
 		};
 
-		let delta_time = time.delta_time.subsec_nanos() as f32 / 1.0e9;
+		let delta_time = time.delta_time.subsec_nanos() as f64 / 1.0e9;
 
 		let mut locals     = locals.pass();
 		let mut positions  = positions.pass();
-		let mut velocities = velocities.pass();
+		let mut collisions = collisions.pass();
 
 		//Process all planks
-		for (ref mut plank, &mut components::Position(ref mut position), &mut components::Velocity(ref mut velocity), ref mut local) in (&mut planks.pass(), &mut positions, &mut velocities, &mut locals).join(){
+		for (ref mut plank, &mut components::Position(ref mut position), &mut components::Collision{ref mut velocity,..}, ref mut local) in (&mut planks.pass(), &mut positions, &mut collisions, &mut locals).join(){
 			match plank.side{
 				//If it is a left plank
 				data::Side::Left =>{
@@ -85,10 +87,10 @@ impl System<()> for PongSystem{
 				}
 			};
 			//Set translation of renderable corresponding to this plank
-			local.translation[0] = position[0];
-			local.translation[1] = position[1];
+			local.translation[0] = position[0] as f32;
+			local.translation[1] = position[1] as f32;
 			//Set scale for renderable corresponding to this plank
-			local.scale = [plank.dimensions[0], plank.dimensions[1], 1.0];
+			local.scale = [plank.dimensions[0] as f32, plank.dimensions[1] as f32, 1.0];
 		}
 
 		//Process the ball
@@ -114,15 +116,24 @@ impl System<()> for PongSystem{
 			}
 
 			//Update the renderable corresponding to this ball
-			local.translation[0] = position[0];
-			local.translation[1] = position[1];
-			local.scale[0] = ball.size*2.0;
-			local.scale[1] = ball.size*2.0;
+			local.translation[0] = position[0] as f32;
+			local.translation[1] = position[1] as f32;
+			local.scale[0]       = ball.size as f32 *2.0;
+			local.scale[1]       = ball.size as f32 *2.0;
 		}
 
 		//Process position from velocity
-		for (&mut components::Position(ref mut position), &mut components::Velocity(ref mut velocity)) in (&mut positions, &mut velocities).join(){
+		for(
+			&mut components::Position(ref mut position),
+			&mut components::Collision{ref mut velocity,ref mut acceleration,..}
+		) in (
+			&mut positions,
+			&mut collisions
+		).join(){
 			//*velocity *= 0.8; //TODO: Temporary fix for friction
+
+			velocity[0] += acceleration[0] * delta_time;
+			velocity[1] += acceleration[1] * delta_time;
 
 			position[0] += velocity[0] * delta_time;
 			position[1] += velocity[1] * delta_time;
@@ -205,7 +216,6 @@ impl State for Pong{
 				self.collision.group,
 				GeometricQueryType::Contacts(0.0),
 				collision::ObjectData{
-					position: Cell::new(pos),
 					..collision::ObjectData::default()
 				}
 			);
@@ -222,7 +232,6 @@ impl State for Pong{
 				self.collision.group,
 				GeometricQueryType::Contacts(0.0),
 				collision::ObjectData{
-					position: Cell::new(pos),
 					..collision::ObjectData::default()
 				}
 			);
@@ -237,28 +246,32 @@ impl State for Pong{
 			let ball  = components::Ball{size: 0.1};
 			let pos   = Vector2::new(0.0,0.0);
 			let vel   = Vector2::new(2.0,2.0);
-			let shape = ShapeHandle2::new(Ball::new(0.1f32));
+			let acc   = Vector2::new(0.0,0.0);
+			let shape = ShapeHandle2::new(Ball::new(0.1));
 			world.create_now()
 				.with(square.clone())
 				.with(ball)
 				.with(components::Position(pos))
-				.with(components::Velocity(vel))
-				.with(components::Collision({
-					let id = self.gen_collision_id();
-					self.collision.world.deferred_add(
-						id,
-						Isometry2::new(pos,zero()),
-						shape,
-						self.collision.group,
-						GeometricQueryType::Contacts(0.0),
-						collision::ObjectData{
-							position: Cell::new(pos),
-							velocity: Cell::new(vel),
-							..collision::ObjectData::default()
-						}
-					);
-					id
-				}))
+				.with(components::Collision{
+					velocity: vel,
+					acceleration: acc,
+					id: {
+						let id = self.gen_collision_id();
+						self.collision.world.deferred_add(
+							id,
+							Isometry2::new(pos,zero()),
+							shape,
+							self.collision.group,
+							GeometricQueryType::Contacts(0.0),
+							collision::ObjectData{
+								typ: ObjectType::Bounce,
+								velocity: Cell::new(vel),
+								..collision::ObjectData::default()
+							}
+						);
+						id
+					}
+				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
@@ -272,28 +285,31 @@ impl State for Pong{
 			};
 			let pos   = Vector2::new(-1.0 + plank.dimensions[0] / 2.0,0.0);
 			let vel   = Vector2::new(0.0,0.0);
-			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(0.1f32/2.0, 0.3/2.0)));
+			let acc   = Vector2::new(0.0,0.0);
+			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(0.1/2.0, 0.3/2.0)));
 			world.create_now()
 				.with(square.clone())
 				.with(plank)
 				.with(components::Position(pos))
-				.with(components::Velocity(vel))
-				.with(components::Collision({
-					let id = self.gen_collision_id();
-					self.collision.world.deferred_add(
-						id,
-						Isometry2::new(pos,zero()),
-						shape,
-						self.collision.group,
-						GeometricQueryType::Contacts(0.0),
-						collision::ObjectData{
-							position: Cell::new(pos),
-							velocity: Cell::new(vel),
-							..collision::ObjectData::default()
-						}
-					);
-					id
-				}))
+				.with(components::Collision{
+					velocity: vel,
+					acceleration: acc,
+					id: {
+						let id = self.gen_collision_id();
+						self.collision.world.deferred_add(
+							id,
+							Isometry2::new(pos,zero()),
+							shape,
+							self.collision.group,
+							GeometricQueryType::Contacts(0.0),
+							collision::ObjectData{
+								velocity: Cell::new(vel),
+								..collision::ObjectData::default()
+							}
+						);
+						id
+					}
+				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
@@ -307,28 +323,31 @@ impl State for Pong{
 			};
 			let pos   = Vector2::new(1.0 + plank.dimensions[0] / 2.0,0.0);
 			let vel   = Vector2::new(0.0,0.0);
-			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(0.1f32/2.0, 0.3/2.0)));
+			let acc   = Vector2::new(0.0,0.0);
+			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(0.1/2.0, 0.3/2.0)));
 			world.create_now()
 				.with(square.clone())
 				.with(plank)
 				.with(components::Position(pos))
-				.with(components::Velocity(vel))
-				.with(components::Collision({
-					let id = self.gen_collision_id();
-					self.collision.world.deferred_add(
-						id,
-						Isometry2::new(pos,zero()),
-						shape,
-						self.collision.group,
-						GeometricQueryType::Contacts(0.0),
-						collision::ObjectData{
-							position: Cell::new(pos),
-							velocity: Cell::new(vel),
-							..collision::ObjectData::default()
-						}
-					);
-					id
-				}))
+				.with(components::Collision{
+					velocity: vel,
+					acceleration: acc,
+					id: {
+						let id = self.gen_collision_id();
+						self.collision.world.deferred_add(
+							id,
+							Isometry2::new(pos,zero()),
+							shape,
+							self.collision.group,
+							GeometricQueryType::Contacts(0.0),
+							collision::ObjectData{
+								velocity: Cell::new(vel),
+								..collision::ObjectData::default()
+							}
+						);
+						id
+					}
+				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
@@ -357,27 +376,32 @@ impl State for Pong{
 
 	fn update(&mut self,world: &mut World,_: &mut AssetManager,_: &mut Pipeline) -> Trans{
 		let mut positions  = world.write::<components::Position>().pass();
-		let mut velocities = world.write::<components::Velocity>().pass();
-		let     objs       = world.read::<components::Collision>().pass();
+		let mut objs       = world.write::<components::Collision>().pass();
 
 		//TODO: Surely this much looping and copying cannot be efficient?
-		for(&components::Collision(obj_id),&mut components::Position(position)) in (&objs,&mut positions).join(){
+		for(&components::Collision{id: obj_id,velocity,acceleration,..},&mut components::Position(position)) in (&objs,&mut positions).join(){
 			self.collision.world.deferred_set_position(obj_id,Isometry2::new(position,zero()));
+			if let Some(obj) = self.collision.world.collision_object(obj_id){
+				obj.data.velocity.set(velocity);
+				obj.data.acceleration.set(acceleration);
+			}
 		}
 
 		self.collision.world.update();
 
 		for(
-			&components::Collision(obj_id),
+			&mut components::Collision{id: obj_id, ref mut velocity,ref mut acceleration,..},
 			&mut components::Position(ref mut position),
-			&mut components::Velocity(ref mut velocity)
-		) in (&objs,&mut positions,&mut velocities).join(){
+		) in (&mut objs,&mut positions).join(){
 			if let Some(obj) = self.collision.world.collision_object(obj_id){
 				position[0] = obj.position.translation.vector[0];
 				position[1] = obj.position.translation.vector[1];
 
 				velocity[0] = obj.data.velocity.get()[0];
 				velocity[1] = obj.data.velocity.get()[1];
+
+				acceleration[0] = obj.data.acceleration.get()[0];
+				acceleration[1] = obj.data.acceleration.get()[1];
 			}
 		}
 
@@ -396,7 +420,6 @@ fn main(){
 		.register::<components::Ball>()
 		.register::<components::Plank>()
 		.register::<components::Position>()
-		.register::<components::Velocity>()
 		.register::<components::Collision>()
 		.with::<PongSystem>(PongSystem, "pong_system", 1)
 		.done();

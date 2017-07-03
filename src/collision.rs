@@ -1,11 +1,11 @@
-use nalgebra::{Isometry2,Point2,Vector2,dot};
+use nalgebra::{Isometry2,Point2,Vector2,dot,norm};
 use ncollide::narrow_phase::{ProximityHandler,ContactHandler,ContactAlgorithm2};
 use ncollide::query::{Contact,Proximity};
 use ncollide::world::{CollisionWorld2,CollisionGroups,CollisionObject2};
 use std::cell::Cell;
 
 pub struct Collision{
-	pub world  : CollisionWorld2<f32,ObjectData>,
+	pub world  : CollisionWorld2<f64,ObjectData>,
 	pub next_id: usize,
 	pub group  : CollisionGroups,
 }
@@ -18,20 +18,28 @@ impl Collision{
 }
 
 #[derive(Clone)]
+pub enum ObjectType{
+	Bounce,
+	Still,
+}
+
+#[derive(Clone)]
 pub struct ObjectData{
-	pub position: Cell<Vector2<f32>>,
-	pub velocity: Cell<Vector2<f32>>,
+	pub velocity    : Cell<Vector2<f64>>,
+	pub acceleration: Cell<Vector2<f64>>,
+	pub typ         : ObjectType,
 }
 impl Default for ObjectData{
 	fn default() -> Self{ObjectData{
-		position: Cell::new(Vector2::new(0.0,0.0)),
-		velocity: Cell::new(Vector2::new(0.0,0.0)),
+		velocity    : Cell::new(Vector2::new(0.0,0.0)),
+		acceleration: Cell::new(Vector2::new(0.0,0.0)),
+		typ         : ObjectType::Still,
 	}}
 }
 
 pub struct ProximityMessage;
-impl ProximityHandler<Point2<f32>,Isometry2<f32>,ObjectData> for ProximityMessage{
-	fn handle_proximity(&mut self,co1: &CollisionObject2<f32,ObjectData>,co2: &CollisionObject2<f32,ObjectData>,_: Proximity,new_proximity: Proximity){
+impl ProximityHandler<Point2<f64>,Isometry2<f64>,ObjectData> for ProximityMessage{
+	fn handle_proximity(&mut self,co1: &CollisionObject2<f64,ObjectData>,co2: &CollisionObject2<f64,ObjectData>,_: Proximity,new_proximity: Proximity){
 		if new_proximity == Proximity::Intersecting{
 			//println!("Intersection start: {:?} , {:?}",co1.position,co2.position);
 		}else if new_proximity == Proximity::Disjoint{
@@ -41,7 +49,7 @@ impl ProximityHandler<Point2<f32>,Isometry2<f32>,ObjectData> for ProximityMessag
 }
 
 pub struct VelocityBouncer{
-	pub tmp_collector: Vec<Contact<Point2<f32>>>
+	pub tmp_collector: Vec<Contact<Point2<f64>>>
 }
 impl VelocityBouncer{
 	pub fn new() -> Self{
@@ -50,8 +58,8 @@ impl VelocityBouncer{
 		}
 	}
 }
-impl ContactHandler<Point2<f32>, Isometry2<f32>,ObjectData> for VelocityBouncer{
-	fn handle_contact_started(&mut self,co1: &CollisionObject2<f32,ObjectData>,co2: &CollisionObject2<f32,ObjectData>,alg: &ContactAlgorithm2<f32>){
+impl ContactHandler<Point2<f64>, Isometry2<f64>,ObjectData> for VelocityBouncer{
+	fn handle_contact_started(&mut self,co1: &CollisionObject2<f64,ObjectData>,co2: &CollisionObject2<f64,ObjectData>,alg: &ContactAlgorithm2<f64>){
 		self.tmp_collector.clear();
 		alg.contacts(&mut self.tmp_collector);
 
@@ -59,14 +67,22 @@ impl ContactHandler<Point2<f32>, Isometry2<f32>,ObjectData> for VelocityBouncer{
 
 		{
 			let normal = self.tmp_collector[0].normal;
-			co1.data.velocity.set(co1.data.velocity.get() - 2.0*dot(&co1.data.velocity.get(),&normal)*normal);
+			let vel = co1.data.velocity.get();
+			match co1.data.typ{
+				ObjectType::Bounce => {co1.data.velocity.set(vel - 2.0*dot(&vel,&normal)*normal);}
+				ObjectType::Still  => {co1.data.velocity.set(vel - dot(&vel,&normal)*normal);}
+			}
 		}{
 			let normal = -self.tmp_collector[0].normal;
-			co2.data.velocity.set(co2.data.velocity.get() - 2.0*dot(&co2.data.velocity.get(),&normal)*normal);
+			let vel = co2.data.velocity.get();
+			match co2.data.typ{
+				ObjectType::Bounce => {co2.data.velocity.set(vel - 2.0*dot(&vel,&normal)*normal);}
+				ObjectType::Still  => {co2.data.velocity.set(vel - dot(&vel,&normal)*normal);}
+			}
 		}
 	}
 
-	fn handle_contact_stopped(&mut self,co1: &CollisionObject2<f32,ObjectData>,co2: &CollisionObject2<f32,ObjectData>){
+	fn handle_contact_stopped(&mut self,co1: &CollisionObject2<f64,ObjectData>,co2: &CollisionObject2<f64,ObjectData>){
 		//println!("Contact stop: {:?} {:?}",co1.position,co2.position);
 	}
 }
