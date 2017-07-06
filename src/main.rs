@@ -10,20 +10,15 @@ mod util;
 use alga::general::AbstractModule;
 use amethyst::{Application, Event, State, Trans, VirtualKeyCode, WindowEvent};
 use amethyst::asset_manager::AssetManager;
-use amethyst::ecs::{Gate, World, Join, RunArg, System};
+use amethyst::ecs::{World, Join, RunArg, System};
 use amethyst::ecs::components::{Mesh, LocalTransform, Texture, Transform};
 use amethyst::gfx_device::DisplayConfig;
 use amethyst::renderer::{Pipeline, VertexPosNormal};
 use nalgebra::{Isometry2,Vector2,dot,zero};
-use nalgebra::geometry::IsometryBase;
-use ncollide::bounding_volume::{AABB,HasBoundingVolume};
 use ncollide::shape::{Cuboid,ShapeHandle2};
 use std::ops::Deref;
 
-struct Score{
-	points: u32,
-	time: f64,
-}
+use data::*;
 
 struct MainSystem;
 unsafe impl Sync for MainSystem{}
@@ -75,24 +70,24 @@ impl System<()> for MainSystem{
 			match player.id{
 				1 =>{
 					if input.key_down(VirtualKeyCode::W){
-						velocity[1]-= 200.0;
+						velocity[1] = -200.0;
 					}
 					if input.key_down(VirtualKeyCode::A){
-						velocity[0]-= 50.0;
+						velocity[0] = -100.0;
 					}
 					if input.key_down(VirtualKeyCode::D){
-						velocity[0]+= 50.0;
+						velocity[0] = 100.0;
 					}
 				}
 				0 =>{
 					if input.key_down(VirtualKeyCode::Up){
-						velocity[1]-= 200.0;
+						velocity[1] = -200.0;
 					}
 					if input.key_down(VirtualKeyCode::Left){
-						velocity[0]-= 50.0;
+						velocity[0] = -100.0;
 					}
 					if input.key_down(VirtualKeyCode::Right){
-						velocity[0]+= 50.0;
+						velocity[0] = 100.0;
 					}
 				}
 				_ => {}
@@ -124,15 +119,13 @@ impl System<()> for MainSystem{
 		) in (
 			&mut collisions,
 		).join(){
-			//*velocity *= 0.8; //TODO: Temporary fix for friction
-
-			*velocity+= acceleration.multiply_by(delta_time);
+			*velocity+= acceleration.multiply_by(delta_time);//TODO
 		}
 
 		//Process collision checking
 		for(
 			&components::Position(position),
-			&components::Collision{velocity,ref shape,check_movement,..},
+			&components::Collision{mut velocity,ref shape,check_movement,..},
 			&mut components::CollisionCache{ref mut new_position,ref mut new_velocity},
 		) in (
 			&positions,
@@ -141,27 +134,36 @@ impl System<()> for MainSystem{
 		).join(){
 			for(
 				&components::Position(position2),
-				&components::Collision{velocity: velocity2,shape: ref shape2,..}
+				&components::Collision{velocity: velocity2,shape: ref shape2,..},
+				&components::Solid{friction,..},
 			) in (
 				&positions,
-				&collisions
+				&collisions,
+				&solids,
 			).join(){
-				//Skip collision with itself, and skip collision checking for static objects
+				//Skip collision with itself
 				if (shape as *const _)==(shape2 as *const _){
 					continue;
 				}
 
+				//Friction
+				velocity = util::vector_lengthen(velocity,-120.0*delta_time);//TODO
+
+				//If this is not a static object (no collision checking) and it made contact to something
 				if let (true,Some(contact)) = (check_movement,::ncollide::query::contact(
-					&Isometry2::new(position,zero()),
+					&Isometry2::new(position + velocity.multiply_by(delta_time),zero()),
 					shape.deref(),
-					&Isometry2::new(position2,zero()),
+					&Isometry2::new(position2 + velocity2.multiply_by(delta_time),zero()),
 					shape2.deref(),
-					1.0
+					0.0
 				)){
-					let parallel = Vector2::new(contact.normal[0],-contact.normal[1]);
+					//let parallel = Vector2::new(-contact.normal[1],contact.normal[0]);
 					//*new_velocity = Some(parallel.multiply_by(dot(&velocity,&parallel)));
-					*new_position = Some(position - contact.normal.multiply_by(contact.depth));
+					//*new_velocity = Some(Vector2::new(0.0,0.0));
+					*new_velocity = Some(velocity - dot(&velocity,&contact.normal)*contact.normal);
+					*new_position = Some(position + velocity.multiply_by(delta_time) - contact.normal.multiply_by(contact.depth.abs()));
 				}else{
+					*new_velocity = Some(velocity);
 					*new_position = Some(position + velocity.multiply_by(delta_time));
 				}
 			}
@@ -248,8 +250,8 @@ impl State for Game{
 		{
 			world.create_now()
 				.with(square.clone())
-				.with(components::Solid{typ: components::SolidType::Solid})
-				.with(components::Position(Vector2::new(400.0,600.0)))
+				.with(components::Solid{typ: SolidType::Solid,friction: 0.5})
+				.with(components::Position(Vector2::new(400.0,400.0)))
 				.with(components::CollisionCache::new())
 				.with(components::Collision{
 					velocity      : Vector2::new(0.0,0.0),
@@ -271,7 +273,7 @@ impl State for Game{
 				.with(components::CollisionCache::new())
 				.with(components::Collision{
 					velocity      : Vector2::new(10.0,10.0),
-					acceleration  : Vector2::new(0.0,600.0),
+					acceleration  : Vector2::new(0.0,400.0),
 					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(32.0, 32.0))),
 					check_movement: true,
 				})
@@ -303,10 +305,15 @@ impl State for Game{
 }
 
 fn main(){
-	let cfg = DisplayConfig::default();
 	let mut game = Application::build(
 		Game,
-		cfg
+		{
+			let mut cfg = DisplayConfig::default();
+			cfg.title          = "STW3".to_owned();
+			cfg.dimensions = Some((640,480));
+			cfg.min_dimensions = Some((640,480));
+			cfg
+		}
 	)
 		.register::<components::Solid>()
 		.register::<components::Player>()

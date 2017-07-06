@@ -2,15 +2,11 @@ use amethyst::ecs::{VecStorage,Component};
 use nalgebra::Vector2;
 use ncollide::shape::ShapeHandle2;
 
+use data::*;
+
 pub struct Position(pub Vector2<f64>);
 impl Component for Position{
 	type Storage = VecStorage<Position>;
-}
-
-#[derive(Eq,PartialEq)]
-pub enum CollisionType{
-	Static,
-	Dynamic,
 }
 
 pub struct Collision{
@@ -38,13 +34,9 @@ impl Component for CollisionCache{
 	type Storage = VecStorage<CollisionCache>;
 }
 
-pub enum SolidType{
-	Solid,
-	FallThrough,
-}
-
 pub struct Solid{
 	pub typ: SolidType,
+	pub friction: f64,
 }
 impl Component for Solid{
 	type Storage = VecStorage<Solid>;
