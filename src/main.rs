@@ -56,33 +56,46 @@ impl System<()> for PongSystem{
 
 		let delta_time = time.delta_time.subsec_nanos() as f64 / 1.0e9;
 
+		let mut planks     = planks.pass();
 		let mut locals     = locals.pass();
 		let mut positions  = positions.pass();
 		let mut collisions = collisions.pass();
 
 		//Process all planks
-		for (ref mut plank, &mut components::Position(ref mut position), &mut components::Collision{ref mut velocity,..}, ref mut local) in (&mut planks.pass(), &mut positions, &mut collisions, &mut locals).join(){
+		for(
+			ref mut plank,
+			&mut components::Position(ref mut position),
+			&mut components::Collision{ref mut velocity,..},
+			ref mut local
+		) in (
+			&mut planks,
+			&mut positions,
+			&mut collisions,
+			&mut locals
+		).join(){
 			match plank.side{
 				//If it is a left plank
 				data::Side::Left =>{
-					//If `W` is pressed and plank is in screen boundaries then move up
 					if input.key_down(VirtualKeyCode::W){
-						*velocity = Vector2::new(0.0,3.0);
+						velocity[1]-= 200.0;
 					}
-					//If `S` is pressed and plank is in screen boundaries then move down
-					if input.key_down(VirtualKeyCode::S){
-						*velocity = Vector2::new(0.0,-3.0);
+					if input.key_down(VirtualKeyCode::A){
+						velocity[0]-= 50.0;
+					}
+					if input.key_down(VirtualKeyCode::D){
+						velocity[0]+= 50.0;
 					}
 				}
 				//If it is a right plank
 				data::Side::Right =>{
-					//If `Up` is pressed and plank is in screen boundaries then move down
 					if input.key_down(VirtualKeyCode::Up){
-						*velocity = Vector2::new(0.0,3.0);
+						velocity[1]-= 200.0;
 					}
-					//If `Down` is pressed and plank is in screen boundaries then move down
-					if input.key_down(VirtualKeyCode::Down){
-						*velocity = Vector2::new(0.0,-3.0);
+					if input.key_down(VirtualKeyCode::Left){
+						velocity[0]-= 50.0;
+					}
+					if input.key_down(VirtualKeyCode::Right){
+						velocity[0]+= 50.0;
 					}
 				}
 			};
@@ -175,10 +188,10 @@ impl State for Pong{
 
 			//Get an Orthographic projection
 			let proj = Projection::Orthographic{
-				left  : -1.0 * aspect_ratio,
-				right :  1.0 * aspect_ratio,
-				bottom: -1.0,
-				top   :  1.0,
+				left  :  0.0 * aspect_ratio,
+				right :  dim.w * aspect_ratio,
+				bottom:  dim.h,
+				top   :  0.0,
 				near  :  0.0,
 				far   :  1.0,
 			};
@@ -243,11 +256,11 @@ impl State for Pong{
 
 		//Create a ball entity
 		{
-			let ball  = components::Ball{size: 0.1};
-			let pos   = Vector2::new(0.0,0.0);
-			let vel   = Vector2::new(2.0,2.0);
+			let ball  = components::Ball{size: 50.0};
+			let pos   = Vector2::new(500.0,0.0);
+			let vel   = Vector2::new(10.0,10.0);
 			let acc   = Vector2::new(0.0,0.0);
-			let shape = ShapeHandle2::new(Ball::new(0.1));
+			let shape = ShapeHandle2::new(Ball::new(50.0));
 			world.create_now()
 				.with(square.clone())
 				.with(ball)
@@ -280,13 +293,13 @@ impl State for Pong{
 		//Create a left plank entity
 		{
 			let plank = components::Plank{
-				dimensions: Vector2::new(0.1,0.3),
+				dimensions: Vector2::new(16.0,32.0),
 				side      : data::Side::Left,
 			};
-			let pos   = Vector2::new(-1.0 + plank.dimensions[0] / 2.0,0.0);
+			let pos   = Vector2::new(10.0 + plank.dimensions[0] / 2.0,0.0);
 			let vel   = Vector2::new(0.0,0.0);
 			let acc   = Vector2::new(0.0,0.0);
-			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(0.1/2.0, 0.3/2.0)));
+			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(16.0/2.0, 32.0/2.0)));
 			world.create_now()
 				.with(square.clone())
 				.with(plank)
@@ -318,13 +331,13 @@ impl State for Pong{
 		//Create right plank entity
 		{
 			let plank = components::Plank{
-				dimensions: Vector2::new(0.1,0.3),
+				dimensions: Vector2::new(16.0,32.0),
 				side      : data::Side::Right,
 			};
-			let pos   = Vector2::new(1.0 + plank.dimensions[0] / 2.0,0.0);
+			let pos   = Vector2::new(100.0 + plank.dimensions[0] / 2.0,0.0);
 			let vel   = Vector2::new(0.0,0.0);
 			let acc   = Vector2::new(0.0,0.0);
-			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(0.1/2.0, 0.3/2.0)));
+			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(10.0/2.0, 30.0/2.0)));
 			world.create_now()
 				.with(square.clone())
 				.with(plank)
@@ -379,7 +392,18 @@ impl State for Pong{
 		let mut objs       = world.write::<components::Collision>().pass();
 
 		//TODO: Surely this much looping and copying cannot be efficient?
-		for(&components::Collision{id: obj_id,velocity,acceleration,..},&mut components::Position(position)) in (&objs,&mut positions).join(){
+		for(
+			&components::Collision{
+				id: obj_id,
+				velocity,
+				acceleration,
+				..
+			},
+			&mut components::Position(position)
+		) in (
+			&objs,
+			&mut positions
+		).join(){
 			self.collision.world.deferred_set_position(obj_id,Isometry2::new(position,zero()));
 			if let Some(obj) = self.collision.world.collision_object(obj_id){
 				obj.data.velocity.set(velocity);

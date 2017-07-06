@@ -32,7 +32,7 @@ pub struct ObjectData{
 impl Default for ObjectData{
 	fn default() -> Self{ObjectData{
 		velocity    : Cell::new(Vector2::new(0.0,0.0)),
-		acceleration: Cell::new(Vector2::new(0.0,0.0)),
+		acceleration: Cell::new(Vector2::new(0.0,160.0)),
 		typ         : ObjectType::Still,
 	}}
 }
