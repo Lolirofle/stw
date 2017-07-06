@@ -66,13 +66,31 @@ impl State for Ingame{
 		{
 			world.create_now()
 				.with(square.clone())
-				.with(components::Solid{typ: data::SolidType::Solid,friction: 0.5})
+				.with(components::Solid{typ: data::SolidType::Solid,friction: 240.0})
 				.with(components::Position(Vector2::new(400.0,400.0)))
 				.with(components::CollisionCache::new())
 				.with(components::Collision{
 					velocity      : Vector2::new(0.0,0.0),
 					acceleration  : Vector2::new(0.0,0.0),
 					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0, 16.0))),
+					check_movement: false,
+				})
+				.with(LocalTransform::default())
+				.with(Transform::default())
+				.build();
+		}
+
+		//Create a slippery floor
+		{
+			world.create_now()
+				.with(square.clone())
+				.with(components::Solid{typ: data::SolidType::Solid,friction: 60.0})
+				.with(components::Position(Vector2::new(500.0,360.0)))
+				.with(components::CollisionCache::new())
+				.with(components::Collision{
+					velocity      : Vector2::new(0.0,0.0),
+					acceleration  : Vector2::new(0.0,0.0),
+					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(100.0, 16.0))),
 					check_movement: false,
 				})
 				.with(LocalTransform::default())

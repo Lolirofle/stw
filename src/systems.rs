@@ -95,6 +95,7 @@ pub mod ingame{
 	}
 
 	pub struct Physics;
+	const AIR_FRICTION: f64 = 30.0; //pixels/seconds^2
 	unsafe impl Sync for Physics {}
 	impl System<()> for Physics {
 		fn run(&mut self, arg: RunArg, _: ()) {
@@ -158,9 +159,6 @@ pub mod ingame{
 						continue;
 					}
 
-					//Friction
-					velocity = util::vector_lengthen(velocity,-120.0*delta_time);//TODO
-
 					//If this is not a static object (no collision checking) and it made contact to something
 					if let (true,Some(contact)) = (check_movement,::ncollide::query::contact(
 						&Isometry2::new(position + velocity.multiply_by(delta_time),zero()),
@@ -169,15 +167,24 @@ pub mod ingame{
 						shape2.deref(),
 						0.0
 					)){
+						//Friction
+						velocity = util::vector_lengthen(velocity,-friction*delta_time);//TODO
+
 						//let parallel = Vector2::new(-contact.normal[1],contact.normal[0]);
 						//*new_velocity = Some(parallel.multiply_by(dot(&velocity,&parallel)));
 						//*new_velocity = Some(Vector2::new(0.0,0.0));
 						*new_velocity = Some(velocity - dot(&velocity,&contact.normal)*contact.normal);
 						*new_position = Some(position + velocity.multiply_by(delta_time) - contact.normal.multiply_by(contact.depth.abs()));
-					}else{
-						*new_velocity = Some(velocity);
-						*new_position = Some(position + velocity.multiply_by(delta_time));
 					}
+				}
+
+				//If there wwere no collisions
+				if let &mut None = new_velocity{
+					//Friction
+					velocity = util::vector_lengthen(velocity,-AIR_FRICTION*delta_time);
+
+					*new_velocity = Some(velocity);
+					*new_position = Some(position + velocity.multiply_by(delta_time));
 				}
 			}
 

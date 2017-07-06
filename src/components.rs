@@ -44,6 +44,7 @@ impl Component for Solid{
 
 pub struct Player{
 	pub id: u8,
+	//pub state: MoverState,
 }
 impl Component for Player{
 	type Storage = VecStorage<Player>;

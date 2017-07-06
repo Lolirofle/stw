@@ -40,6 +40,8 @@ pub fn vector_lengthen(v: Vector2<f64>,x: f64) -> Vector2<f64>{
 	use alga::general::AbstractModule;
 
 	let norm2 = v.norm_squared();
+	if norm2 == 0.0{return v;} //Avoid division by 0 in v.normalize()
+
 	let x2 = x*x;
 
 	if norm2 < x2{
