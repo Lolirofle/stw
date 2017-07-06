@@ -6,6 +6,7 @@ extern crate ncollide;
 mod components;
 mod data;
 mod util;
+mod systems;
 
 use alga::general::AbstractModule;
 use amethyst::{Application, Event, State, Trans, VirtualKeyCode, WindowEvent};
@@ -58,60 +59,6 @@ impl System<()> for MainSystem{
 		let mut positions        = positions.pass();
 		let mut collisions       = collisions.pass();
 		let mut collision_caches = collision_caches.pass();
-
-		//Process all players
-		for(
-			ref mut player,
-			&mut components::Collision{ref mut velocity,..},
-		) in (
-			&mut players,
-			&mut collisions,
-		).join(){
-			match player.id{
-				1 =>{
-					if input.key_down(VirtualKeyCode::W){
-						velocity[1] = -200.0;
-					}
-					if input.key_down(VirtualKeyCode::A){
-						velocity[0] = -100.0;
-					}
-					if input.key_down(VirtualKeyCode::D){
-						velocity[0] = 100.0;
-					}
-				}
-				0 =>{
-					if input.key_down(VirtualKeyCode::Up){
-						velocity[1] = -200.0;
-					}
-					if input.key_down(VirtualKeyCode::Left){
-						velocity[0] = -100.0;
-					}
-					if input.key_down(VirtualKeyCode::Right){
-						velocity[0] = 100.0;
-					}
-				}
-				_ => {}
-			};
-		}
-
-		//Process renderables
-		for(
-			&components::Position(position),
-			&components::Collision{ref shape,..},
-			ref mut local
-		) in (
-			&positions,
-			&collisions,
-			&mut locals
-		).join(){
-			//Update the renderable corresponding to this entity
-			let aabb         = shape.aabb(&Isometry2::new(position,0.0));
-			let mins         = aabb.center();
-			let len          = aabb.maxs() - aabb.mins();
-			local.translation[0] = mins[0] as f32;
-			local.translation[1] = mins[1] as f32;
-			local.scale = [len[0] as f32, len[1] as f32, 1.0];
-		}
 
 		//Process velocity from acceleration
 		for(
@@ -321,6 +268,8 @@ fn main(){
 		.register::<components::Collision>()
 		.register::<components::CollisionCache>()
 		.with::<MainSystem>(MainSystem, "main_system", 1)
+    .with::<systems::InputSystem>(systems::InputSystem, "input_system", 1)
+    .with::<systems::RenderSystem>(systems::RenderSystem, "render_system", 1)
 		.done();
 	game.run();
 }
