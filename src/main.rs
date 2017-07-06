@@ -8,136 +8,16 @@ mod data;
 mod util;
 mod systems;
 
-use alga::general::AbstractModule;
 use amethyst::{Application, Event, State, Trans, VirtualKeyCode, WindowEvent};
 use amethyst::asset_manager::AssetManager;
-use amethyst::ecs::{World, Join, RunArg, System};
+use amethyst::ecs::World;
 use amethyst::ecs::components::{Mesh, LocalTransform, Texture, Transform};
 use amethyst::gfx_device::DisplayConfig;
 use amethyst::renderer::{Pipeline, VertexPosNormal};
-use nalgebra::{Isometry2,Vector2,dot,zero};
+use nalgebra::Vector2;
 use ncollide::shape::{Cuboid,ShapeHandle2};
-use std::ops::Deref;
 
 use data::*;
-
-struct MainSystem;
-unsafe impl Sync for MainSystem{}
-impl System<()> for MainSystem{
-	fn run(&mut self, arg: RunArg, _: ()){
-		use amethyst::ecs::Gate;
-		use amethyst::ecs::resources::{Camera, InputHandler, Projection, Time};
-
-		//Get all needed component storages and resources
-		let ((mut solids, players), (positions, collisions, collision_caches), (locals, camera, time, input), mut score) = arg.fetch(|w| (
-			(
-				w.write::<components::Solid>(),
-				w.write::<components::Player>(),
-			),(
-				w.write::<components::Position>(),
-				w.write::<components::Collision>(),
-				w.write::<components::CollisionCache>(),
-			),(
-				w.write::<LocalTransform>(),
-				w.read_resource::<Camera>(),
-				w.read_resource::<Time>(),
-				w.read_resource::<InputHandler>(),
-			),
-			w.write_resource::<Score>(),
-		));
-
-		//Get left and right boundaries of the screen
-		let (left_bound,right_bound,_,_) = match camera.proj{
-			Projection::Orthographic{left,right,top,bottom,..} => (left as f64,right as f64,top as f64,bottom as f64),
-			_ => (1.0,1.0,1.0,1.0),
-		};
-
-		let delta_time = time.delta_time.subsec_nanos() as f64 / 1.0e9;
-
-		let mut players          = players.pass();
-		let mut locals           = locals.pass();
-		let mut positions        = positions.pass();
-		let mut collisions       = collisions.pass();
-		let mut collision_caches = collision_caches.pass();
-
-		//Process velocity from acceleration
-		for(
-			&mut components::Collision{ref mut velocity,ref mut acceleration,..},
-		) in (
-			&mut collisions,
-		).join(){
-			*velocity+= acceleration.multiply_by(delta_time);//TODO
-		}
-
-		//Process collision checking
-		for(
-			&components::Position(position),
-			&components::Collision{mut velocity,ref shape,check_movement,..},
-			&mut components::CollisionCache{ref mut new_position,ref mut new_velocity},
-		) in (
-			&positions,
-			&collisions,
-			&mut collision_caches,
-		).join(){
-			for(
-				&components::Position(position2),
-				&components::Collision{velocity: velocity2,shape: ref shape2,..},
-				&components::Solid{friction,..},
-			) in (
-				&positions,
-				&collisions,
-				&solids,
-			).join(){
-				//Skip collision with itself
-				if (shape as *const _)==(shape2 as *const _){
-					continue;
-				}
-
-				//Friction
-				velocity = util::vector_lengthen(velocity,-120.0*delta_time);//TODO
-
-				//If this is not a static object (no collision checking) and it made contact to something
-				if let (true,Some(contact)) = (check_movement,::ncollide::query::contact(
-					&Isometry2::new(position + velocity.multiply_by(delta_time),zero()),
-					shape.deref(),
-					&Isometry2::new(position2 + velocity2.multiply_by(delta_time),zero()),
-					shape2.deref(),
-					0.0
-				)){
-					//let parallel = Vector2::new(-contact.normal[1],contact.normal[0]);
-					//*new_velocity = Some(parallel.multiply_by(dot(&velocity,&parallel)));
-					//*new_velocity = Some(Vector2::new(0.0,0.0));
-					*new_velocity = Some(velocity - dot(&velocity,&contact.normal)*contact.normal);
-					*new_position = Some(position + velocity.multiply_by(delta_time) - contact.normal.multiply_by(contact.depth.abs()));
-				}else{
-					*new_velocity = Some(velocity);
-					*new_position = Some(position + velocity.multiply_by(delta_time));
-				}
-			}
-		}
-
-		//Process position after collision checking
-		for(
-			&mut components::Position(ref mut position),
-			&mut components::Collision{ref mut velocity,..},
-			&mut components::CollisionCache{ref mut new_position,ref mut new_velocity},
-		) in (
-			&mut positions,
-			&mut collisions,
-			&mut collision_caches,
-		).join(){
-			if let &mut Some(ref mut new_position) = new_position{
-				*position = *new_position;
-			}
-			*new_position = None;
-
-			if let &mut Some(ref mut new_velocity) = new_velocity{
-				*velocity = *new_velocity;
-			}
-			*new_velocity = None;
-		}
-	}
-}
 
 struct Game;
 impl State for Game{
@@ -267,9 +147,9 @@ fn main(){
 		.register::<components::Position>()
 		.register::<components::Collision>()
 		.register::<components::CollisionCache>()
-		.with::<MainSystem>(MainSystem, "main_system", 1)
     .with::<systems::InputSystem>(systems::InputSystem, "input_system", 1)
     .with::<systems::RenderSystem>(systems::RenderSystem, "render_system", 1)
+    .with::<systems::PhysicsSystem>(systems::PhysicsSystem, "physics_system", 1)
 		.done();
 	game.run();
 }

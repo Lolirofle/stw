@@ -2,7 +2,7 @@
 use components;
 
 use amethyst::VirtualKeyCode;
-use amethyst::ecs::{World, Join, RunArg, System};
+use amethyst::ecs::{Join, RunArg, System};
 use std::ops::Deref;
 use amethyst::ecs::Gate;
 
@@ -92,4 +92,115 @@ impl System<()> for RenderSystem {
 			local.scale = [len[0] as f32, len[1] as f32, 1.0];
 		}
   }
+}
+
+pub struct PhysicsSystem;
+unsafe impl Sync for PhysicsSystem {}
+impl System<()> for PhysicsSystem {
+
+  fn run(&mut self, arg: RunArg, _: ()) {
+	use alga::general::AbstractModule;
+	use amethyst::ecs::resources::Time;
+    use nalgebra::{Isometry2,dot,zero};
+
+    use util;
+
+    let (
+    	collisions,
+    	collision_caches,
+    	positions,
+    	solids,
+    	time,
+    ) = arg.fetch(|w| {(
+      w.write::<components::Collision>(),
+      w.write::<components::CollisionCache>(),
+      w.write::<components::Position>(),
+		w.read::<components::Solid>(),
+		w.read_resource::<Time>(),
+    )});
+
+    let delta_time = time.delta_time.subsec_nanos() as f64 / 1.0e9;
+
+    let mut collisions       = collisions.pass();
+    let mut collision_caches = collision_caches.pass();
+    let mut positions        = positions.pass();
+    let     solids           = solids.pass();
+
+    //Process velocity from acceleration
+    for(
+    	&mut components::Collision{ref mut velocity,ref mut acceleration,..},
+    ) in (
+    	&mut collisions,
+    ).join(){
+    	*velocity+= acceleration.multiply_by(delta_time);//TODO
+    }
+
+    //Process collision checking
+	for(
+		&components::Position(position),
+		&components::Collision{mut velocity,ref shape,check_movement,..},
+		&mut components::CollisionCache{ref mut new_position,ref mut new_velocity},
+	) in (
+		&positions,
+		&collisions,
+		&mut collision_caches,
+	).join(){
+		for(
+			&components::Position(position2),
+			&components::Collision{velocity: velocity2,shape: ref shape2,..},
+			&components::Solid{friction,..},
+		) in (
+			&positions,
+			&collisions,
+			&solids,
+		).join(){
+			//Skip collision with itself
+			if (shape as *const _)==(shape2 as *const _){
+				continue;
+			}
+
+			//Friction
+			velocity = util::vector_lengthen(velocity,-120.0*delta_time);//TODO
+
+			//If this is not a static object (no collision checking) and it made contact to something
+			if let (true,Some(contact)) = (check_movement,::ncollide::query::contact(
+				&Isometry2::new(position + velocity.multiply_by(delta_time),zero()),
+				shape.deref(),
+				&Isometry2::new(position2 + velocity2.multiply_by(delta_time),zero()),
+				shape2.deref(),
+				0.0
+			)){
+				//let parallel = Vector2::new(-contact.normal[1],contact.normal[0]);
+				//*new_velocity = Some(parallel.multiply_by(dot(&velocity,&parallel)));
+				//*new_velocity = Some(Vector2::new(0.0,0.0));
+				*new_velocity = Some(velocity - dot(&velocity,&contact.normal)*contact.normal);
+				*new_position = Some(position + velocity.multiply_by(delta_time) - contact.normal.multiply_by(contact.depth.abs()));
+			}else{
+				*new_velocity = Some(velocity);
+				*new_position = Some(position + velocity.multiply_by(delta_time));
+			}
+		}
+	}
+
+	//Process position after collision checking
+	for(
+		&mut components::Position(ref mut position),
+		&mut components::Collision{ref mut velocity,..},
+		&mut components::CollisionCache{ref mut new_position,ref mut new_velocity},
+	) in (
+		&mut positions,
+		&mut collisions,
+		&mut collision_caches,
+	).join(){
+		if let &mut Some(ref mut new_position) = new_position{
+			*position = *new_position;
+		}
+		*new_position = None;
+
+		if let &mut Some(ref mut new_velocity) = new_velocity{
+			*velocity = *new_velocity;
+		}
+		*new_velocity = None;
+	}
+}
 }
