@@ -26,15 +26,14 @@ impl State for Ingame{
 		{
 			let dim = world.read_resource::<ScreenDimensions>().pass();
 			let mut camera = world.write_resource::<Camera>().pass();
-			let aspect_ratio = dim.aspect_ratio;
 			let eye    = [0.0, 0.0, 0.1];
 			let target = [0.0, 0.0, 0.0];
 			let up     = [0.0, 1.0, 0.0];
 
 			//Get an Orthographic projection
 			let proj = Projection::Orthographic{
-				left  :  0.0 * aspect_ratio,
-				right :  dim.w * aspect_ratio,
+				left  :  0.0 ,
+				right :  dim.w,
 				bottom:  dim.h,
 				top   :  0.0,
 				near  :  0.0,
@@ -67,7 +66,7 @@ impl State for Ingame{
 			world.create_now()
 				.with(square.clone())
 				.with(components::Solid{typ: data::SolidType::Solid,friction: 240.0})
-				.with(components::Position(Vector2::new(400.0,400.0)))
+				.with(components::Position(Vector2::new(200.0,400.0)))
 				.with(components::CollisionCache::new())
 				.with(components::Collision{
 					velocity      : Vector2::new(0.0,0.0),
@@ -85,7 +84,7 @@ impl State for Ingame{
 			world.create_now()
 				.with(square.clone())
 				.with(components::Solid{typ: data::SolidType::Solid,friction: 60.0})
-				.with(components::Position(Vector2::new(500.0,360.0)))
+				.with(components::Position(Vector2::new(420.0,360.0)))
 				.with(components::CollisionCache::new())
 				.with(components::Collision{
 					velocity      : Vector2::new(0.0,0.0),
