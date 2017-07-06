@@ -147,9 +147,9 @@ fn main(){
 		.register::<components::Position>()
 		.register::<components::Collision>()
 		.register::<components::CollisionCache>()
-    .with::<systems::InputSystem>(systems::InputSystem, "input_system", 1)
-    .with::<systems::RenderSystem>(systems::RenderSystem, "render_system", 1)
-    .with::<systems::PhysicsSystem>(systems::PhysicsSystem, "physics_system", 1)
+	.with::<systems::InputSystem>(systems::InputSystem, "input_system", 1)
+	.with::<systems::RenderSystem>(systems::RenderSystem, "render_system", 1)
+	.with::<systems::PhysicsSystem>(systems::PhysicsSystem, "physics_system", 1)
 		.done();
 	game.run();
 }
