@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Lolirofle <lolipopple@hotmail.com>"]
 
 [dependencies]
+alga     = "*"
 amethyst = "*"
 nalgebra = "*"
 ncollide = "*" #{path = "ncollide"}

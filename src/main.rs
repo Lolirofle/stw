@@ -1,45 +1,47 @@
+extern crate alga;
 extern crate amethyst;
 extern crate nalgebra;
 extern crate ncollide;
 
-mod collision;
 mod components;
 mod data;
 mod util;
 
+use alga::general::AbstractModule;
 use amethyst::{Application, Event, State, Trans, VirtualKeyCode, WindowEvent};
 use amethyst::asset_manager::AssetManager;
 use amethyst::ecs::{Gate, World, Join, RunArg, System};
 use amethyst::ecs::components::{Mesh, LocalTransform, Texture, Transform};
 use amethyst::gfx_device::DisplayConfig;
 use amethyst::renderer::{Pipeline, VertexPosNormal};
-use nalgebra::{Isometry2,Vector2,zero};
-use ncollide::shape::{Plane,Ball,Cuboid,ShapeHandle2};
-use ncollide::world::GeometricQueryType;
-use std::cell::Cell;
-
-use collision::ObjectType;
+use nalgebra::{Isometry2,Vector2,dot,zero};
+use nalgebra::geometry::IsometryBase;
+use ncollide::bounding_volume::{AABB,HasBoundingVolume};
+use ncollide::shape::{Cuboid,ShapeHandle2};
+use std::ops::Deref;
 
 struct Score{
-	score_left: i32,
-	score_right: i32,
+	points: u32,
+	time: f64,
 }
 
-//Pong game system
-struct PongSystem;
-unsafe impl Sync for PongSystem{}
-impl System<()> for PongSystem{
+struct MainSystem;
+unsafe impl Sync for MainSystem{}
+impl System<()> for MainSystem{
 	fn run(&mut self, arg: RunArg, _: ()){
 		use amethyst::ecs::Gate;
 		use amethyst::ecs::resources::{Camera, InputHandler, Projection, Time};
 
 		//Get all needed component storages and resources
-		let (mut balls, planks, positions, collisions, (locals, camera, time, input), mut score) = arg.fetch(|w| (
-			w.write::<components::Ball>(),
-			w.write::<components::Plank>(),
-			w.write::<components::Position>(),
-			w.write::<components::Collision>(),
+		let ((mut solids, players), (positions, collisions, collision_caches), (locals, camera, time, input), mut score) = arg.fetch(|w| (
 			(
+				w.write::<components::Solid>(),
+				w.write::<components::Player>(),
+			),(
+				w.write::<components::Position>(),
+				w.write::<components::Collision>(),
+				w.write::<components::CollisionCache>(),
+			),(
 				w.write::<LocalTransform>(),
 				w.read_resource::<Camera>(),
 				w.read_resource::<Time>(),
@@ -56,26 +58,22 @@ impl System<()> for PongSystem{
 
 		let delta_time = time.delta_time.subsec_nanos() as f64 / 1.0e9;
 
-		let mut planks     = planks.pass();
-		let mut locals     = locals.pass();
-		let mut positions  = positions.pass();
-		let mut collisions = collisions.pass();
+		let mut players          = players.pass();
+		let mut locals           = locals.pass();
+		let mut positions        = positions.pass();
+		let mut collisions       = collisions.pass();
+		let mut collision_caches = collision_caches.pass();
 
-		//Process all planks
+		//Process all players
 		for(
-			ref mut plank,
-			&mut components::Position(ref mut position),
+			ref mut player,
 			&mut components::Collision{ref mut velocity,..},
-			ref mut local
 		) in (
-			&mut planks,
-			&mut positions,
+			&mut players,
 			&mut collisions,
-			&mut locals
 		).join(){
-			match plank.side{
-				//If it is a left plank
-				data::Side::Left =>{
+			match player.id{
+				1 =>{
 					if input.key_down(VirtualKeyCode::W){
 						velocity[1]-= 200.0;
 					}
@@ -86,8 +84,7 @@ impl System<()> for PongSystem{
 						velocity[0]+= 50.0;
 					}
 				}
-				//If it is a right plank
-				data::Side::Right =>{
+				0 =>{
 					if input.key_down(VirtualKeyCode::Up){
 						velocity[1]-= 200.0;
 					}
@@ -98,73 +95,103 @@ impl System<()> for PongSystem{
 						velocity[0]+= 50.0;
 					}
 				}
+				_ => {}
 			};
-			//Set translation of renderable corresponding to this plank
-			local.translation[0] = position[0] as f32;
-			local.translation[1] = position[1] as f32;
-			//Set scale for renderable corresponding to this plank
-			local.scale = [plank.dimensions[0] as f32, plank.dimensions[1] as f32, 1.0];
 		}
 
-		//Process the ball
-		for (ref mut ball, &mut components::Position(ref mut position), ref mut local) in (&mut balls, &mut positions, &mut locals).join(){
-			//Check if the ball is to the left of the right boundary, if it is not reset it's position and score the left player
-			if position[0] - ball.size / 2. > right_bound{
-				position[0] = 0.;
-				score.score_left += 1;
-				println!("L: {0} ; R: {1}",
-					score.score_left,
-					score.score_right
-				);
-			}
-
-			//Check if the ball is to the right of the left boundary, if it is not reset it's position and score the right player
-			if position[0] + ball.size / 2. < left_bound{
-				position[0] = 0.;
-				score.score_right += 1;
-				println!("L: {0} ; R: {1}",
-					score.score_left,
-					score.score_right
-				);
-			}
-
-			//Update the renderable corresponding to this ball
-			local.translation[0] = position[0] as f32;
-			local.translation[1] = position[1] as f32;
-			local.scale[0]       = ball.size as f32 *2.0;
-			local.scale[1]       = ball.size as f32 *2.0;
-		}
-
-		//Process position from velocity
+		//Process renderables
 		for(
-			&mut components::Position(ref mut position),
-			&mut components::Collision{ref mut velocity,ref mut acceleration,..}
+			&components::Position(position),
+			&components::Collision{ref shape,..},
+			ref mut local
 		) in (
-			&mut positions,
-			&mut collisions
+			&positions,
+			&collisions,
+			&mut locals
+		).join(){
+			//Update the renderable corresponding to this entity
+			let aabb         = shape.aabb(&Isometry2::new(position,0.0));
+			let mins         = aabb.center();
+			let len          = aabb.maxs() - aabb.mins();
+			local.translation[0] = mins[0] as f32;
+			local.translation[1] = mins[1] as f32;
+			local.scale = [len[0] as f32, len[1] as f32, 1.0];
+		}
+
+		//Process velocity from acceleration
+		for(
+			&mut components::Collision{ref mut velocity,ref mut acceleration,..},
+		) in (
+			&mut collisions,
 		).join(){
 			//*velocity *= 0.8; //TODO: Temporary fix for friction
 
-			velocity[0] += acceleration[0] * delta_time;
-			velocity[1] += acceleration[1] * delta_time;
+			*velocity+= acceleration.multiply_by(delta_time);
+		}
 
-			position[0] += velocity[0] * delta_time;
-			position[1] += velocity[1] * delta_time;
+		//Process collision checking
+		for(
+			&components::Position(position),
+			&components::Collision{velocity,ref shape,check_movement,..},
+			&mut components::CollisionCache{ref mut new_position,ref mut new_velocity},
+		) in (
+			&positions,
+			&collisions,
+			&mut collision_caches,
+		).join(){
+			for(
+				&components::Position(position2),
+				&components::Collision{velocity: velocity2,shape: ref shape2,..}
+			) in (
+				&positions,
+				&collisions
+			).join(){
+				//Skip collision with itself, and skip collision checking for static objects
+				if (shape as *const _)==(shape2 as *const _){
+					continue;
+				}
+
+				if let (true,Some(contact)) = (check_movement,::ncollide::query::contact(
+					&Isometry2::new(position,zero()),
+					shape.deref(),
+					&Isometry2::new(position2,zero()),
+					shape2.deref(),
+					1.0
+				)){
+					let parallel = Vector2::new(contact.normal[0],-contact.normal[1]);
+					//*new_velocity = Some(parallel.multiply_by(dot(&velocity,&parallel)));
+					*new_position = Some(position - contact.normal.multiply_by(contact.depth));
+				}else{
+					*new_position = Some(position + velocity.multiply_by(delta_time));
+				}
+			}
+		}
+
+		//Process position after collision checking
+		for(
+			&mut components::Position(ref mut position),
+			&mut components::Collision{ref mut velocity,..},
+			&mut components::CollisionCache{ref mut new_position,ref mut new_velocity},
+		) in (
+			&mut positions,
+			&mut collisions,
+			&mut collision_caches,
+		).join(){
+			if let &mut Some(ref mut new_position) = new_position{
+				*position = *new_position;
+			}
+			*new_position = None;
+
+			if let &mut Some(ref mut new_velocity) = new_velocity{
+				*velocity = *new_velocity;
+			}
+			*new_velocity = None;
 		}
 	}
 }
 
-struct Pong{
-	collision: collision::Collision,
-}
-impl Pong{
-	fn gen_collision_id(&mut self) -> usize{
-		let id = self.collision.next_id;
-		self.collision.next_id+= 1;
-		id
-	}
-}
-impl State for Pong{
+struct Game;
+impl State for Game{
 	fn on_start(&mut self, world: &mut World, assets: &mut AssetManager, pipe: &mut Pipeline){
 		use amethyst::ecs::Gate;
 		use amethyst::ecs::resources::{Camera, InputHandler, Projection, ScreenDimensions};
@@ -204,8 +231,8 @@ impl State for Pong{
 
 		//Add all resources
 		world.add_resource::<Score>(Score{
-			score_left : 0,
-			score_right: 0,
+			points : 0,
+			time: 0.0,
 		});
 		world.add_resource::<InputHandler>(InputHandler::new());
 
@@ -217,149 +244,36 @@ impl State for Pong{
 		assets.load_asset_from_data::<Mesh, Vec<VertexPosNormal>>("square", square_verts);
 		let square = assets.create_renderable("square", "white", "white", "white", 1.0).unwrap();
 
-		//Add borders to the collision checking
+		//Create a floor
 		{
-			let plane = ShapeHandle2::new(Plane::new(Vector2::y()));
-			let pos   = Vector2::new(0.0,-1.0);
-			let id    = self.gen_collision_id();
-			self.collision.world.deferred_add(
-				id,
-				Isometry2::new(pos,zero()),
-				plane,
-				self.collision.group,
-				GeometricQueryType::Contacts(0.0),
-				collision::ObjectData{
-					..collision::ObjectData::default()
-				}
-			);
-		}
-
-		{
-			let plane = ShapeHandle2::new(Plane::new(-Vector2::y()));
-			let pos   = Vector2::new(0.0,1.0);
-			let id    = self.gen_collision_id();
-			self.collision.world.deferred_add(
-				id,
-				Isometry2::new(pos,zero()),
-				plane,
-				self.collision.group,
-				GeometricQueryType::Contacts(0.0),
-				collision::ObjectData{
-					..collision::ObjectData::default()
-				}
-			);
-		}
-
-		//Register handlers.
-		self.collision.world.register_proximity_handler("ProximityMessage", collision::ProximityMessage);
-		self.collision.world.register_contact_handler("VelocityBouncer", collision::VelocityBouncer::new());
-
-		//Create a ball entity
-		{
-			let ball  = components::Ball{size: 50.0};
-			let pos   = Vector2::new(500.0,0.0);
-			let vel   = Vector2::new(10.0,10.0);
-			let acc   = Vector2::new(0.0,0.0);
-			let shape = ShapeHandle2::new(Ball::new(50.0));
 			world.create_now()
 				.with(square.clone())
-				.with(ball)
-				.with(components::Position(pos))
+				.with(components::Solid{typ: components::SolidType::Solid})
+				.with(components::Position(Vector2::new(400.0,600.0)))
+				.with(components::CollisionCache::new())
 				.with(components::Collision{
-					velocity: vel,
-					acceleration: acc,
-					id: {
-						let id = self.gen_collision_id();
-						self.collision.world.deferred_add(
-							id,
-							Isometry2::new(pos,zero()),
-							shape,
-							self.collision.group,
-							GeometricQueryType::Contacts(0.0),
-							collision::ObjectData{
-								typ: ObjectType::Bounce,
-								velocity: Cell::new(vel),
-								..collision::ObjectData::default()
-							}
-						);
-						id
-					}
+					velocity      : Vector2::new(0.0,0.0),
+					acceleration  : Vector2::new(0.0,0.0),
+					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0, 16.0))),
+					check_movement: false,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
 		}
 
-		//Create a left plank entity
+		//Create player
 		{
-			let plank = components::Plank{
-				dimensions: Vector2::new(16.0,32.0),
-				side      : data::Side::Left,
-			};
-			let pos   = Vector2::new(10.0 + plank.dimensions[0] / 2.0,0.0);
-			let vel   = Vector2::new(0.0,0.0);
-			let acc   = Vector2::new(0.0,0.0);
-			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(16.0/2.0, 32.0/2.0)));
 			world.create_now()
 				.with(square.clone())
-				.with(plank)
-				.with(components::Position(pos))
+				.with(components::Player{id: 0})
+				.with(components::Position(Vector2::new(500.0,100.0)))
+				.with(components::CollisionCache::new())
 				.with(components::Collision{
-					velocity: vel,
-					acceleration: acc,
-					id: {
-						let id = self.gen_collision_id();
-						self.collision.world.deferred_add(
-							id,
-							Isometry2::new(pos,zero()),
-							shape,
-							self.collision.group,
-							GeometricQueryType::Contacts(0.0),
-							collision::ObjectData{
-								velocity: Cell::new(vel),
-								..collision::ObjectData::default()
-							}
-						);
-						id
-					}
-				})
-				.with(LocalTransform::default())
-				.with(Transform::default())
-				.build();
-		}
-
-		//Create right plank entity
-		{
-			let plank = components::Plank{
-				dimensions: Vector2::new(16.0,32.0),
-				side      : data::Side::Right,
-			};
-			let pos   = Vector2::new(100.0 + plank.dimensions[0] / 2.0,0.0);
-			let vel   = Vector2::new(0.0,0.0);
-			let acc   = Vector2::new(0.0,0.0);
-			let shape = ShapeHandle2::new(Cuboid::new(Vector2::new(10.0/2.0, 30.0/2.0)));
-			world.create_now()
-				.with(square.clone())
-				.with(plank)
-				.with(components::Position(pos))
-				.with(components::Collision{
-					velocity: vel,
-					acceleration: acc,
-					id: {
-						let id = self.gen_collision_id();
-						self.collision.world.deferred_add(
-							id,
-							Isometry2::new(pos,zero()),
-							shape,
-							self.collision.group,
-							GeometricQueryType::Contacts(0.0),
-							collision::ObjectData{
-								velocity: Cell::new(vel),
-								..collision::ObjectData::default()
-							}
-						);
-						id
-					}
+					velocity      : Vector2::new(10.0,10.0),
+					acceleration  : Vector2::new(0.0,600.0),
+					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(32.0, 32.0))),
+					check_movement: true,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
@@ -386,66 +300,20 @@ impl State for Pong{
 
 		Trans::None
 	}
-
-	fn update(&mut self,world: &mut World,_: &mut AssetManager,_: &mut Pipeline) -> Trans{
-		let mut positions  = world.write::<components::Position>().pass();
-		let mut objs       = world.write::<components::Collision>().pass();
-
-		//TODO: Surely this much looping and copying cannot be efficient?
-		for(
-			&components::Collision{
-				id: obj_id,
-				velocity,
-				acceleration,
-				..
-			},
-			&mut components::Position(position)
-		) in (
-			&objs,
-			&mut positions
-		).join(){
-			self.collision.world.deferred_set_position(obj_id,Isometry2::new(position,zero()));
-			if let Some(obj) = self.collision.world.collision_object(obj_id){
-				obj.data.velocity.set(velocity);
-				obj.data.acceleration.set(acceleration);
-			}
-		}
-
-		self.collision.world.update();
-
-		for(
-			&mut components::Collision{id: obj_id, ref mut velocity,ref mut acceleration,..},
-			&mut components::Position(ref mut position),
-		) in (&mut objs,&mut positions).join(){
-			if let Some(obj) = self.collision.world.collision_object(obj_id){
-				position[0] = obj.position.translation.vector[0];
-				position[1] = obj.position.translation.vector[1];
-
-				velocity[0] = obj.data.velocity.get()[0];
-				velocity[1] = obj.data.velocity.get()[1];
-
-				acceleration[0] = obj.data.acceleration.get()[0];
-				acceleration[1] = obj.data.acceleration.get()[1];
-			}
-		}
-
-		Trans::None
-	}
 }
 
 fn main(){
 	let cfg = DisplayConfig::default();
 	let mut game = Application::build(
-		Pong{
-			collision: collision::Collision::new(),
-		},
+		Game,
 		cfg
 	)
-		.register::<components::Ball>()
-		.register::<components::Plank>()
+		.register::<components::Solid>()
+		.register::<components::Player>()
 		.register::<components::Position>()
 		.register::<components::Collision>()
-		.with::<PongSystem>(PongSystem, "pong_system", 1)
+		.register::<components::CollisionCache>()
+		.with::<MainSystem>(MainSystem, "main_system", 1)
 		.done();
 	game.run();
 }
