@@ -102,20 +102,66 @@ impl State for Ingame{
 	fn handle_events(&mut self,events: &[WindowEvent],world: &mut World,_: &mut AssetManager,_: &mut Pipeline) -> Trans{
 		use amethyst::ecs::Gate;
 		use amethyst::ecs::resources::InputHandler;
+		use amethyst::ElementState;
 
 		let input = world.write_resource::<InputHandler>();
 		input.pass().update(events);
 
+		let mut state_transition = Trans::None;
 		for e in events{
 			match **e{
 				Event::KeyboardInput(_,_,Some(VirtualKeyCode::Escape)) |
 				Event::Closed => {
-					return Trans::Quit
+					state_transition = Trans::Quit;
 				},
-				_ => (),
+				Event::KeyboardInput(ElementState::Pressed,_,Some(VirtualKeyCode::Return)) => {
+					state_transition = Trans::Push(Box::new(states::Pause));
+				},
+				_ => {},
 			}
 		}
 
-		Trans::None
+		state_transition
+	}
+}
+
+pub struct Pause; //TODO: The world does not suspend when doing a state transition (push)
+impl State for Pause{
+	fn on_start(&mut self, _world: &mut World, _assets: &mut AssetManager, pipe: &mut Pipeline){
+		use amethyst::renderer::Layer;
+		use amethyst::renderer::pass::{Clear, DrawFlat};
+
+		let layer = Layer::new("main",vec![
+			Clear::new([0.2, 0.2, 0.2, 1.0]),
+			DrawFlat::new("main", "main")
+		]);
+
+		pipe.layers.push(layer);
+	}
+
+	fn handle_events(&mut self,events: &[WindowEvent],world: &mut World,_: &mut AssetManager,pipe: &mut Pipeline) -> Trans{
+		use amethyst::ecs::Gate;
+		use amethyst::ecs::resources::InputHandler;
+		use amethyst::ElementState;
+
+		let input = world.write_resource::<InputHandler>();
+		input.pass().update(events);
+
+		let mut state_transition = Trans::None;
+		for e in events{
+			match **e{
+				Event::KeyboardInput(_,_,Some(VirtualKeyCode::Escape)) |
+				Event::Closed => {
+					state_transition = Trans::Quit;
+				},
+				Event::KeyboardInput(ElementState::Pressed,_,Some(VirtualKeyCode::Return)) => {
+					state_transition = Trans::Pop;
+					pipe.layers.pop();
+				},
+				_ => {},
+			}
+		}
+
+		state_transition
 	}
 }
