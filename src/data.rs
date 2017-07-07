@@ -1,7 +1,15 @@
+use nalgebra::Vector2;
+
 #[derive(Copy,Clone,PartialEq)]
 pub struct Score{
 	pub points: u32,
-	pub time: f64,
+	pub start_time: f64,
+}
+impl Score{
+	pub fn new() -> Self{Score{
+		points    : 0,
+		start_time: 0.0,
+	}}
 }
 
 #[derive(Copy,Clone,Eq,PartialEq,Hash)]
@@ -16,11 +24,28 @@ pub enum SolidType{
 	FallThrough,
 }
 
-#[derive(Copy,Clone,Eq,PartialEq,Hash)]
+#[derive(Copy,Clone,PartialEq)]
 pub enum MoverState{
-	Standing,
+	OnGround{normal: Vector2<f64>},
+	Ducking{normal: Vector2<f64>},
 	Falling,
-	MovingFreely,
-	MovingColliding,
 	Jumping,
+}
+
+#[derive(Copy,Clone,PartialEq)]
+pub enum MoverMovement{
+	Freely{direction: Vector2<f64>},
+	Colliding{direction: Vector2<f64>,normal: Vector2<f64>},
+}
+
+#[derive(Copy,Clone,PartialEq)]
+pub struct MoverData{
+	pub state_start_time   : f64,
+	pub movement_start_time: f64,
+}
+impl MoverData{
+	pub fn new() -> Self{MoverData{
+		state_start_time   : 0.0,
+		movement_start_time: 0.0,
+	}}
 }

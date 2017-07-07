@@ -47,10 +47,7 @@ impl State for Ingame{
 		}
 
 		//Add all resources
-		world.add_resource::<data::Score>(data::Score{
-			points : 0,
-			time: 0.0,
-		});
+		world.add_resource::<data::Score>(data::Score::new());
 		world.add_resource::<InputHandler>(InputHandler::new());
 
 		//Generate a square mesh
@@ -72,6 +69,7 @@ impl State for Ingame{
 					acceleration     : Vector2::new(0.0,0.0),
 					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0, 16.0))),
 					check_movement   : false,
+					gravity          : false,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
@@ -90,6 +88,7 @@ impl State for Ingame{
 					acceleration     : Vector2::new(0.0,0.0),
 					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(100.0, 16.0))),
 					check_movement   : false,
+					gravity          : false,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
@@ -105,9 +104,10 @@ impl State for Ingame{
 				.with(components::CollisionCache::new())
 				.with(components::Collision{
 					velocity         : Vector2::new(10.0,10.0),
-					acceleration     : Vector2::new(0.0,400.0),
+					acceleration     : Vector2::new(0.0,0.0),
 					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(16.0, 32.0))),
 					check_movement   : true,
+					gravity          : true,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())

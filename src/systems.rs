@@ -187,13 +187,17 @@ pub mod ingame{
 			//Process position after collision checking, and velocity from acceleration (Variant of Velocity Verlet Integration)
 			for(
 				&mut components::Position(ref mut position),
-				&mut components::Collision{ref mut velocity,ref mut acceleration,..},
+				&mut components::Collision{ref mut velocity,mut acceleration,gravity,..},
 				&mut components::CollisionCache{ref mut new_position,ref mut new_velocity,ref mut old_acceleration,..},
 			) in (
 				&mut positions,
 				&mut collisions,
 				&mut collision_caches,
 			).join(){
+				if gravity{
+					acceleration[1]+= 400.0;
+				}
+
 				//Update all positions
 				if let &mut Some(ref mut new_position) = new_position{
 					//new_position = (position + velocity*delta_time) when no collision
@@ -203,12 +207,12 @@ pub mod ingame{
 
 				//Update all velocities
 				if let &mut Some(ref mut new_velocity) = new_velocity{
-					*velocity = *new_velocity + (*acceleration + *old_acceleration).multiply_by(delta_time / 2.0);
+					*velocity = *new_velocity + (acceleration + *old_acceleration).multiply_by(delta_time / 2.0);
 				}
 				*new_velocity = None;
 
 				//Set the old acceleration to the current one (preparing for the next step)
-				*old_acceleration = *acceleration;
+				*old_acceleration = acceleration;
 			}
 
 			//TODO: Collect all collisions, call a collision event function which gives specs::RunArg::fetch as an argument? Consider using the already existing ConctactHandlers (comes with ncollide)?

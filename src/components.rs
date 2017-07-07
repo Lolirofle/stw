@@ -14,6 +14,7 @@ pub struct Collision{
 	pub acceleration     : Vector2<f64>,//TODO: Consider having a function that calculates acceleration instead from all its components (but I cannot find a way to implement it organized). An alternative could be to have a temporary acceleration variable for each step.
 	pub shape            : ShapeHandle2<f64>,
 	pub check_movement   : bool,
+	pub gravity          : bool,
 }
 impl Component for Collision{
 	type Storage = VecStorage<Collision>;
