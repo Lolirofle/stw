@@ -22,14 +22,17 @@ impl Component for Collision{
 
 
 pub struct CollisionCache{
-	pub new_position: Option<Vector2<f64>>,
-	pub new_velocity: Option<Vector2<f64>>,
+	//Values to change to after collision checking (Temporary storage)
+	pub new_position    : Option<Vector2<f64>>,
+	pub new_velocity    : Option<Vector2<f64>>,
+
+	//Acceleration in the previous step
 	pub old_acceleration: Vector2<f64>,
 }
 impl CollisionCache{
 	pub fn new() -> Self{CollisionCache{
-		new_position: None,
-		new_velocity: None,
+		new_position    : None,
+		new_velocity    : None,
 		old_acceleration: Vector2::new(0.0,0.0),
 	}}
 }
