@@ -1,7 +1,7 @@
 use amethyst::renderer::VertexPosNormal;
 use nalgebra::Vector2;
 
-pub fn gen_rectangle(w: f32,h: f32) -> Vec<VertexPosNormal>{
+pub fn gen_rectangle_glvertices(w: f32,h: f32) -> Vec<VertexPosNormal>{
 	vec![
 		VertexPosNormal{
 			pos: [-w / 2., -h / 2., 0.],

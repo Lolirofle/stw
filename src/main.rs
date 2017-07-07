@@ -1,3 +1,5 @@
+#![feature(associated_consts)]
+
 extern crate alga;
 extern crate amethyst;
 extern crate nalgebra;

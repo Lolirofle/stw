@@ -18,6 +18,7 @@ pub enum SolidType{
 
 #[derive(Copy,Clone,Eq,PartialEq,Hash)]
 pub enum MoverState{
+	Standing,
 	Falling,
 	MovingFreely,
 	MovingColliding,

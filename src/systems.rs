@@ -95,8 +95,10 @@ pub mod ingame{
 	}
 
 	pub struct Physics;
-	const AIR_FRICTION: f64 = 30.0; //pixels/seconds^2
 	unsafe impl Sync for Physics {}
+	impl Physics{
+		pub const AIR_FRICTION: f64 = 30.0; //pixels/seconds^2
+	}
 	impl System<()> for Physics {
 		fn run(&mut self, arg: RunArg, _: ()) {
 			use alga::general::AbstractModule;
@@ -126,20 +128,11 @@ pub mod ingame{
 			let mut positions        = positions.pass();
 			let     solids           = solids.pass();
 
-			//Process velocity from acceleration
-			for(
-				&mut components::Collision{ref mut velocity,ref mut acceleration,..},
-			) in (
-				&mut collisions,
-			).join(){
-				*velocity+= acceleration.multiply_by(delta_time);//TODO
-			}
-
 			//Process collision checking
 			for(
 				&components::Position(position),
 				&components::Collision{mut velocity,ref shape,check_movement,..},
-				&mut components::CollisionCache{ref mut new_position,ref mut new_velocity},
+				&mut components::CollisionCache{ref mut new_position,ref mut new_velocity,..},
 			) in (
 				&positions,
 				&collisions,
@@ -168,46 +161,57 @@ pub mod ingame{
 						0.0
 					)){
 						//Friction
-						velocity = util::vector_lengthen(velocity,-friction*delta_time);//TODO
+						velocity = util::vector_lengthen(velocity,-friction*delta_time); //TODO: Should this be included in the integration below? How? By introducing a new variable in CollisionCache which could be called tmp_acceleration that will be calculated in beforehand here?
 
-						//let parallel = Vector2::new(-contact.normal[1],contact.normal[0]);
-						//*new_velocity = Some(parallel.multiply_by(dot(&velocity,&parallel)));
-						//*new_velocity = Some(Vector2::new(0.0,0.0));
+						//Join with other possible collision resolvements
+						//TODO: Also join position resolvements. The effect/bug can be seen when leaning against one solid while falling onto another one (The velocity will slow down before reaching the ground). To get the general feel of the problem, remove the following code block and one will fall through the ground instead.
+						if let &mut Some(new_velocity) = new_velocity{
+							velocity = new_velocity;
+						}
+
 						*new_velocity = Some(velocity - dot(&velocity,&contact.normal)*contact.normal);
 						*new_position = Some(position + velocity.multiply_by(delta_time) - contact.normal.multiply_by(contact.depth.abs()));
 					}
 				}
 
-				//If there wwere no collisions
+				//If there are no collisions
 				if let &mut None = new_velocity{
 					//Friction
-					velocity = util::vector_lengthen(velocity,-AIR_FRICTION*delta_time);
+					velocity = util::vector_lengthen(velocity,-Self::AIR_FRICTION*delta_time);
 
 					*new_velocity = Some(velocity);
 					*new_position = Some(position + velocity.multiply_by(delta_time));
 				}
 			}
 
-			//Process position after collision checking
+			//Process position after collision checking, and velocity from acceleration (Variant of Velocity Verlet Integration)
 			for(
 				&mut components::Position(ref mut position),
-				&mut components::Collision{ref mut velocity,..},
-				&mut components::CollisionCache{ref mut new_position,ref mut new_velocity},
+				&mut components::Collision{ref mut velocity,ref mut acceleration,..},
+				&mut components::CollisionCache{ref mut new_position,ref mut new_velocity,ref mut old_acceleration,..},
 			) in (
 				&mut positions,
 				&mut collisions,
 				&mut collision_caches,
 			).join(){
+				//Update all positions
 				if let &mut Some(ref mut new_position) = new_position{
-					*position = *new_position;
+					//new_position = (position + velocity*delta_time) when no collision
+					*position = *new_position + acceleration.multiply_by(delta_time*delta_time / 2.0);
 				}
 				*new_position = None;
 
+				//Update all velocities
 				if let &mut Some(ref mut new_velocity) = new_velocity{
-					*velocity = *new_velocity;
+					*velocity = *new_velocity + (*acceleration + *old_acceleration).multiply_by(delta_time / 2.0);
 				}
 				*new_velocity = None;
+
+				//Set the old acceleration to the current one (preparing for the next step)
+				*old_acceleration = *acceleration;
 			}
+
+			//TODO: Collect all collisions, call a collision event function which gives specs::RunArg::fetch as an argument? Consider using the already existing ConctactHandlers (comes with ncollide)?
 		}
 	}
 }

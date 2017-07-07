@@ -57,8 +57,7 @@ impl State for Ingame{
 		assets.register_asset::<Mesh>();
 		assets.register_asset::<Texture>();
 		assets.load_asset_from_data::<Texture, [f32; 4]>("white", [1.0, 1.0, 1.0, 1.0]);
-		let square_verts = util::gen_rectangle(1.0, 1.0);
-		assets.load_asset_from_data::<Mesh, Vec<VertexPosNormal>>("square", square_verts);
+		assets.load_asset_from_data::<Mesh, Vec<VertexPosNormal>>("square", util::gen_rectangle_glvertices(1.0, 1.0));
 		let square = assets.create_renderable("square", "white", "white", "white", 1.0).unwrap();
 
 		//Create a floor
@@ -69,10 +68,10 @@ impl State for Ingame{
 				.with(components::Position(Vector2::new(200.0,400.0)))
 				.with(components::CollisionCache::new())
 				.with(components::Collision{
-					velocity      : Vector2::new(0.0,0.0),
-					acceleration  : Vector2::new(0.0,0.0),
-					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0, 16.0))),
-					check_movement: false,
+					velocity         : Vector2::new(0.0,0.0),
+					acceleration     : Vector2::new(0.0,0.0),
+					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0, 16.0))),
+					check_movement   : false,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
@@ -87,10 +86,10 @@ impl State for Ingame{
 				.with(components::Position(Vector2::new(420.0,360.0)))
 				.with(components::CollisionCache::new())
 				.with(components::Collision{
-					velocity      : Vector2::new(0.0,0.0),
-					acceleration  : Vector2::new(0.0,0.0),
-					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(100.0, 16.0))),
-					check_movement: false,
+					velocity         : Vector2::new(0.0,0.0),
+					acceleration     : Vector2::new(0.0,0.0),
+					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(100.0, 16.0))),
+					check_movement   : false,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
@@ -105,10 +104,10 @@ impl State for Ingame{
 				.with(components::Position(Vector2::new(500.0,100.0)))
 				.with(components::CollisionCache::new())
 				.with(components::Collision{
-					velocity      : Vector2::new(10.0,10.0),
-					acceleration  : Vector2::new(0.0,400.0),
-					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(32.0, 32.0))),
-					check_movement: true,
+					velocity         : Vector2::new(10.0,10.0),
+					acceleration     : Vector2::new(0.0,400.0),
+					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(16.0, 32.0))),
+					check_movement   : true,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())

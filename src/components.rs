@@ -1,4 +1,4 @@
-use amethyst::ecs::{VecStorage,Component};
+use amethyst::ecs::{HashMapStorage,VecStorage,Component};
 use nalgebra::Vector2;
 use ncollide::shape::ShapeHandle2;
 
@@ -10,10 +10,10 @@ impl Component for Position{
 }
 
 pub struct Collision{
-	pub velocity      : Vector2<f64>,
-	pub acceleration  : Vector2<f64>,
-	pub shape         : ShapeHandle2<f64>,
-	pub check_movement: bool,
+	pub velocity         : Vector2<f64>,
+	pub acceleration     : Vector2<f64>,//TODO: Consider having a function that calculates acceleration instead from all its components (but I cannot find a way to implement it organized). An alternative could be to have a temporary acceleration variable for each step.
+	pub shape            : ShapeHandle2<f64>,
+	pub check_movement   : bool,
 }
 impl Component for Collision{
 	type Storage = VecStorage<Collision>;
@@ -23,11 +23,13 @@ impl Component for Collision{
 pub struct CollisionCache{
 	pub new_position: Option<Vector2<f64>>,
 	pub new_velocity: Option<Vector2<f64>>,
+	pub old_acceleration: Vector2<f64>,
 }
 impl CollisionCache{
 	pub fn new() -> Self{CollisionCache{
 		new_position: None,
 		new_velocity: None,
+		old_acceleration: Vector2::new(0.0,0.0),
 	}}
 }
 impl Component for CollisionCache{
@@ -47,5 +49,5 @@ pub struct Player{
 	//pub state: MoverState,
 }
 impl Component for Player{
-	type Storage = VecStorage<Player>;
+	type Storage = HashMapStorage<Player>;
 }
