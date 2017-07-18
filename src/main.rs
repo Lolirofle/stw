@@ -12,6 +12,7 @@ mod states;
 mod systems;
 
 use amethyst::Application;
+use amethyst::ecs::systems::TransformSystem;
 use amethyst::gfx_device::DisplayConfig;
 
 fn main(){
@@ -31,9 +32,10 @@ fn main(){
 		.register::<components::Position>()
 		.register::<components::Collision>()
 		.register::<components::CollisionCache>()
-		.with::<systems::ingame::PlayerInput>(systems::ingame::PlayerInput, "input_system", 1)
-		.with::<systems::ingame::Physics>(systems::ingame::Physics, "physics_system", 1)
-		.with::<systems::ingame::Render>(systems::ingame::Render, "render_system", 1)
+		.with::<systems::ingame::PlayerInput>(systems::ingame::PlayerInput,"input_system"    ,&[])
+		.with::<systems::ingame::Physics>    (systems::ingame::Physics    ,"physics_system"  ,&[])
+		.with::<systems::ingame::Render>     (systems::ingame::Render     ,"render_system"   ,&[])
+		.with::<TransformSystem>             (TransformSystem::new()      ,"transform_system",&["input_system","physics_system","render_system"])
 		.done();
 	game.run();
 }

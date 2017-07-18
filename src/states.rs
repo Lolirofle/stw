@@ -11,21 +11,20 @@ use *;
 pub struct Ingame;
 impl State for Ingame{
 	fn on_start(&mut self, world: &mut World, assets: &mut AssetManager, pipe: &mut Pipeline){
-		use amethyst::ecs::Gate;
 		use amethyst::ecs::resources::{Camera, InputHandler, Projection, ScreenDimensions};
 		use amethyst::renderer::Layer;
 		use amethyst::renderer::pass::{Clear, DrawFlat};
 
 		let layer = Layer::new("main",vec![
 			Clear::new([0.0, 0.0, 0.0, 1.0]),
-			DrawFlat::new("main", "main")
+			DrawFlat::new("main","main")
 		]);
 
 		pipe.layers.push(layer);
 
 		{
-			let dim = world.read_resource::<ScreenDimensions>().pass();
-			let mut camera = world.write_resource::<Camera>().pass();
+			let dim = world.read_resource::<ScreenDimensions>();
+			let mut camera = world.write_resource::<Camera>();
 			let eye    = [0.0, 0.0, 0.1];
 			let target = [0.0, 0.0, 0.0];
 			let up     = [0.0, 1.0, 0.0];
@@ -59,7 +58,7 @@ impl State for Ingame{
 
 		//Create a floor
 		{
-			world.create_now()
+			world.create_entity()
 				.with(square.clone())
 				.with(components::Solid{typ: data::SolidType::Solid,friction: 240.0})
 				.with(components::Position(Vector2::new(200.0,400.0)))
@@ -78,7 +77,7 @@ impl State for Ingame{
 
 		//Create a slippery floor
 		{
-			world.create_now()
+			world.create_entity()
 				.with(square.clone())
 				.with(components::Solid{typ: data::SolidType::Solid,friction: 60.0})
 				.with(components::Position(Vector2::new(420.0,360.0)))
@@ -97,7 +96,7 @@ impl State for Ingame{
 
 		//Create player
 		{
-			world.create_now()
+			world.create_entity()
 				.with(square.clone())
 				.with(components::Player{id: 0})
 				.with(components::Position(Vector2::new(500.0,100.0)))
@@ -116,12 +115,11 @@ impl State for Ingame{
 	}
 
 	fn handle_events(&mut self,events: &[WindowEvent],world: &mut World,_: &mut AssetManager,_: &mut Pipeline) -> Trans{
-		use amethyst::ecs::Gate;
 		use amethyst::ecs::resources::InputHandler;
 		use amethyst::ElementState;
 
-		let input = world.write_resource::<InputHandler>();
-		input.pass().update(events);
+		let mut input = world.write_resource::<InputHandler>();
+		input.update(events);
 
 		let mut state_transition = Trans::None;
 		for e in events{
@@ -156,12 +154,11 @@ impl State for Pause{
 	}
 
 	fn handle_events(&mut self,events: &[WindowEvent],world: &mut World,_: &mut AssetManager,pipe: &mut Pipeline) -> Trans{
-		use amethyst::ecs::Gate;
 		use amethyst::ecs::resources::InputHandler;
 		use amethyst::ElementState;
 
-		let input = world.write_resource::<InputHandler>();
-		input.pass().update(events);
+		let mut input = world.write_resource::<InputHandler>();
+		input.update(events);
 
 		let mut state_transition = Trans::None;
 		for e in events{

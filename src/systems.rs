@@ -1,25 +1,21 @@
 pub mod ingame{
-	use amethyst::ecs::{Join, RunArg, System};
-	use amethyst::ecs::Gate;
+	use amethyst::ecs::{Join,Fetch,System,ReadStorage,WriteStorage};
+	use amethyst::ecs::components::LocalTransform;
+	use amethyst::ecs::resources::{InputHandler,Time};
 	use std::ops::Deref;
 
 	use *;
 
 	pub struct PlayerInput;
-	unsafe impl Sync for PlayerInput {}
-	impl System<()> for PlayerInput {
-		fn run(&mut self, arg: RunArg, _: ()) {
-			use amethyst::ecs::resources::InputHandler;
+	impl<'a> System<'a> for PlayerInput{
+		type SystemData = (
+			WriteStorage<'a,components::Collision>,
+			WriteStorage<'a,components::Player>,
+			Fetch<'a,InputHandler>,
+		);
+
+		fn run(&mut self,(mut collisions,mut players,input): Self::SystemData){
 			use amethyst::VirtualKeyCode;
-
-			let (collisions, players, input) = arg.fetch(|w| {(
-				w.write::<components::Collision>(),
-				w.write::<components::Player>(),
-				w.read_resource::<InputHandler>(),
-			)});
-
-			let mut players = players.pass();
-			let mut collisions = collisions.pass();
 
 			for(
 				ref mut player,
@@ -58,21 +54,15 @@ pub mod ingame{
 	}
 
 	pub struct Render;
-	unsafe impl Sync for Render {}
-	impl System<()> for Render {
-		fn run(&mut self, arg: RunArg, _: ()) {
-			use amethyst::ecs::components::LocalTransform;
+	impl<'a> System<'a> for Render{
+		type SystemData = (
+			ReadStorage<'a,components::Collision>,
+			ReadStorage<'a,components::Position>,
+			WriteStorage<'a,LocalTransform>,
+		);
+
+		fn run(&mut self,(collisions,positions,mut locals): Self::SystemData){
 			use nalgebra::Isometry2;
-
-			let (collisions, positions, locals) = arg.fetch(|w| {(
-				w.read::<components::Collision>(),
-				w.read::<components::Position>(),
-				w.write::<LocalTransform>()
-			)});
-
-			let collisions = collisions.pass();
-			let positions  = positions.pass();
-			let mut locals = locals.pass();
 
 			for(
 				&components::Position(position),
@@ -95,38 +85,25 @@ pub mod ingame{
 	}
 
 	pub struct Physics;
-	unsafe impl Sync for Physics {}
 	impl Physics{
 		pub const AIR_FRICTION: f64 = 30.0; //pixels/seconds^2
 	}
-	impl System<()> for Physics {
-		fn run(&mut self, arg: RunArg, _: ()) {
+	impl<'a> System<'a> for Physics{
+		type SystemData = (
+			WriteStorage<'a,components::Collision>,
+			WriteStorage<'a,components::CollisionCache>,
+			WriteStorage<'a,components::Position>,
+			ReadStorage<'a,components::Solid>,
+			Fetch<'a,Time>,
+		);
+
+		fn run(&mut self,(mut collisions,mut collision_caches,mut positions,solids,time): Self::SystemData){
 			use alga::general::AbstractModule;
-			use amethyst::ecs::resources::Time;
 			use nalgebra::{Isometry2,Vector2,dot,zero};
 
 			use util;
 
-			let (
-				collisions,
-				collision_caches,
-				positions,
-				solids,
-				time,
-			) = arg.fetch(|w| {(
-				w.write::<components::Collision>(),
-				w.write::<components::CollisionCache>(),
-				w.write::<components::Position>(),
-				w.read::<components::Solid>(),
-				w.read_resource::<Time>(),
-			)});
-
 			let delta_time = time.delta_time.subsec_nanos() as f64 / 1.0e9;
-
-			let mut collisions       = collisions.pass();
-			let mut collision_caches = collision_caches.pass();
-			let mut positions        = positions.pass();
-			let     solids           = solids.pass();
 
 			//Step movement (using something like Velocity Verlet Integration), and process collision checking
 			for(
