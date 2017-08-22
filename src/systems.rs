@@ -1,7 +1,8 @@
 pub mod ingame{
 	use amethyst::ecs::{Join,Fetch,System,ReadStorage,WriteStorage};
 	use amethyst::ecs::components::LocalTransform;
-	use amethyst::ecs::resources::{InputHandler,Time};
+	use amethyst::ecs::resources::Time;
+	use amethyst::ecs::resources::input::InputHandler;
 	use std::ops::Deref;
 
 	use *;
@@ -9,41 +10,43 @@ pub mod ingame{
 	pub struct PlayerInput;
 	impl<'a> System<'a> for PlayerInput{
 		type SystemData = (
-			WriteStorage<'a,components::Collision>,
+			WriteStorage<'a,components::Solid>,
 			WriteStorage<'a,components::Player>,
 			Fetch<'a,InputHandler>,
 		);
 
 		fn run(&mut self,(mut collisions,mut players,input): Self::SystemData){
 			use amethyst::VirtualKeyCode;
+			use amethyst::ecs::resources::input::ButtonState::*;
+			use amethyst::ecs::resources::input::ChangeState::*;
 
 			for(
 				ref mut player,
-				&mut components::Collision{ref mut velocity,..},
+				&mut components::Solid{ref mut velocity,..},
 			) in (
 				&mut players,
 				&mut collisions,
 			).join(){
 				match player.id{
 					1 =>{
-						if input.key_down(VirtualKeyCode::W){
+						if input.key_is(VirtualKeyCode::W,Pressed(ThisFrame)){
 							velocity[1] = -200.0;
 						}
-						if input.key_down(VirtualKeyCode::A){
+						if input.key_is(VirtualKeyCode::A,Pressed(Currently)){
 							velocity[0] = -100.0;
 						}
-						if input.key_down(VirtualKeyCode::D){
+						if input.key_is(VirtualKeyCode::D,Pressed(Currently)){
 							velocity[0] = 100.0;
 						}
 					}
 					0 =>{
-						if input.key_down(VirtualKeyCode::Up){
+						if input.key_is(VirtualKeyCode::Up,Pressed(ThisFrame)){
 							velocity[1] = -200.0;
 						}
-						if input.key_down(VirtualKeyCode::Left){
+						if input.key_is(VirtualKeyCode::Left,Pressed(Currently)){
 							velocity[0] = -100.0;
 						}
-						if input.key_down(VirtualKeyCode::Right){
+						if input.key_is(VirtualKeyCode::Right,Pressed(Currently)){
 							velocity[0] = 100.0;
 						}
 					}
@@ -56,7 +59,7 @@ pub mod ingame{
 	pub struct Render;
 	impl<'a> System<'a> for Render{
 		type SystemData = (
-			ReadStorage<'a,components::Collision>,
+			ReadStorage<'a,components::Solid>,
 			ReadStorage<'a,components::Position>,
 			WriteStorage<'a,LocalTransform>,
 		);
@@ -66,7 +69,7 @@ pub mod ingame{
 
 			for(
 				&components::Position(position),
-				&components::Collision{ref shape,..},
+				&components::Solid{ref shape,..},
 				ref mut local
 			) in (
 				&positions,
@@ -90,14 +93,13 @@ pub mod ingame{
 	}
 	impl<'a> System<'a> for Physics{
 		type SystemData = (
-			WriteStorage<'a,components::Collision>,
 			WriteStorage<'a,components::CollisionCache>,
 			WriteStorage<'a,components::Position>,
-			ReadStorage<'a,components::Solid>,
+			WriteStorage<'a,components::Solid>,
 			Fetch<'a,Time>,
 		);
 
-		fn run(&mut self,(mut collisions,mut collision_caches,mut positions,solids,time): Self::SystemData){
+		fn run(&mut self,(mut collision_caches,mut positions,mut solids,time): Self::SystemData){
 			use alga::general::AbstractModule;
 			use nalgebra::{Isometry2,Vector2,dot,zero};
 
@@ -108,11 +110,11 @@ pub mod ingame{
 			//Step movement (using something like Velocity Verlet Integration), and process collision checking
 			for(
 				&components::Position(position),
-				&components::Collision{mut velocity,mut acceleration,gravity,ref shape,check_movement,..},
+				&components::Solid{mut velocity,mut acceleration,gravity,ref shape,check_movement,..},
 				&mut components::CollisionCache{ref mut new_position,ref mut new_velocity,..},
 			) in (
 				&positions,
-				&collisions,
+				&solids,
 				&mut collision_caches,
 			).join(){
 				//Check acceleration with gravity (TODO: repeating gravity below)
@@ -130,11 +132,9 @@ pub mod ingame{
 				//Check for every existing object
 				for(
 					&components::Position(position2),
-					&components::Collision{velocity: velocity2,acceleration: acceleration2,shape: ref shape2,..},
-					&components::Solid{friction,..},
+					&components::Solid{friction,velocity: velocity2,acceleration: acceleration2,shape: ref shape2,..},
 				) in (
 					&positions,
-					&collisions,
 					&solids,
 				).join(){
 					//Skip collision with itself
@@ -181,11 +181,11 @@ pub mod ingame{
 			//Change the variables for real: Positions after collision checking, and velocities from acceleration
 			for(
 				&mut components::Position(ref mut position),
-				&mut components::Collision{ref mut velocity,mut acceleration,gravity,..},
+				&mut components::Solid{ref mut velocity,mut acceleration,gravity,..},
 				&mut components::CollisionCache{ref mut new_position,ref mut new_velocity,ref mut old_acceleration,..},
 			) in (
 				&mut positions,
-				&mut collisions,
+				&mut solids,
 				&mut collision_caches,
 			).join(){
 				//Apply gravity

@@ -9,18 +9,6 @@ impl Component for Position{
 	type Storage = VecStorage<Position>;
 }
 
-pub struct Collision{
-	pub velocity         : Vector2<f64>,
-	pub acceleration     : Vector2<f64>,//TODO: Consider having a function that calculates acceleration instead from all its components (but I cannot find a way to implement it organized). An alternative could be to have a temporary acceleration variable for each step.
-	pub shape            : ShapeHandle2<f64>,
-	pub check_movement   : bool,
-	pub gravity          : bool,
-}
-impl Component for Collision{
-	type Storage = VecStorage<Collision>;
-}
-
-
 pub struct CollisionCache{
 	//Values to change to after collision checking (Temporary storage)
 	pub new_position    : Option<Vector2<f64>>,
@@ -41,8 +29,13 @@ impl Component for CollisionCache{
 }
 
 pub struct Solid{
-	pub typ: SolidType,
-	pub friction: f64,
+	pub typ           : SolidType,
+	pub friction      : f64,
+	pub velocity      : Vector2<f64>,
+	pub acceleration  : Vector2<f64>,//TODO: Consider having a function that calculates acceleration instead from all its components (but I cannot find a way to implement it organized). An alternative could be to have a temporary acceleration variable for each step.
+	pub shape         : ShapeHandle2<f64>,
+	pub check_movement: bool,
+	pub gravity       : bool,
 }
 impl Component for Solid{
 	type Storage = VecStorage<Solid>;

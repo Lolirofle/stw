@@ -1,7 +1,6 @@
-#![feature(associated_consts)]
-
 extern crate alga;
 extern crate amethyst;
+extern crate core;
 extern crate nalgebra;
 extern crate ncollide;
 
@@ -30,7 +29,6 @@ fn main(){
 		.register::<components::Solid>()
 		.register::<components::Player>()
 		.register::<components::Position>()
-		.register::<components::Collision>()
 		.register::<components::CollisionCache>()
 		.with::<systems::ingame::PlayerInput>(systems::ingame::PlayerInput,"input_system"    ,&[])
 		.with::<systems::ingame::Physics>    (systems::ingame::Physics    ,"physics_system"  ,&[])

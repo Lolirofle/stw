@@ -11,9 +11,10 @@ use *;
 pub struct Ingame;
 impl State for Ingame{
 	fn on_start(&mut self, world: &mut World, assets: &mut AssetManager, pipe: &mut Pipeline){
-		use amethyst::ecs::resources::{Camera, InputHandler, Projection, ScreenDimensions};
+		use amethyst::ecs::resources::input::InputHandler;
+		use amethyst::ecs::resources::{Camera,Projection,ScreenDimensions};
 		use amethyst::renderer::Layer;
-		use amethyst::renderer::pass::{Clear, DrawFlat};
+		use amethyst::renderer::pass::{Clear,DrawFlat};
 
 		let layer = Layer::new("main",vec![
 			Clear::new([0.0, 0.0, 0.0, 1.0]),
@@ -60,15 +61,16 @@ impl State for Ingame{
 		{
 			world.create_entity()
 				.with(square.clone())
-				.with(components::Solid{typ: data::SolidType::Solid,friction: 240.0})
 				.with(components::Position(Vector2::new(200.0,400.0)))
 				.with(components::CollisionCache::new())
-				.with(components::Collision{
-					velocity         : Vector2::new(0.0,0.0),
-					acceleration     : Vector2::new(0.0,0.0),
-					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0, 16.0))),
-					check_movement   : false,
-					gravity          : false,
+				.with(components::Solid{
+					typ           : data::SolidType::Solid,
+					friction      : 240.0,
+					velocity      : Vector2::new(0.0,0.0),
+					acceleration  : Vector2::new(0.0,0.0),
+					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0, 16.0))),
+					check_movement: false,
+					gravity       : false,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
@@ -79,15 +81,16 @@ impl State for Ingame{
 		{
 			world.create_entity()
 				.with(square.clone())
-				.with(components::Solid{typ: data::SolidType::Solid,friction: 60.0})
 				.with(components::Position(Vector2::new(420.0,360.0)))
 				.with(components::CollisionCache::new())
-				.with(components::Collision{
-					velocity         : Vector2::new(0.0,0.0),
-					acceleration     : Vector2::new(0.0,0.0),
-					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(100.0, 16.0))),
-					check_movement   : false,
-					gravity          : false,
+				.with(components::Solid{
+					typ           : data::SolidType::Solid,
+					friction      : 60.0,
+					velocity      : Vector2::new(0.0,0.0),
+					acceleration  : Vector2::new(0.0,0.0),
+					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(100.0, 16.0))),
+					check_movement: false,
+					gravity       : false,
 				})
 				.with(LocalTransform::default())
 				.with(Transform::default())
@@ -101,7 +104,9 @@ impl State for Ingame{
 				.with(components::Player{id: 0})
 				.with(components::Position(Vector2::new(500.0,100.0)))
 				.with(components::CollisionCache::new())
-				.with(components::Collision{
+				.with(components::Solid{
+					typ              : data::SolidType::Solid,
+					friction         : 1000.0,
 					velocity         : Vector2::new(10.0,10.0),
 					acceleration     : Vector2::new(0.0,0.0),
 					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(16.0, 32.0))),
@@ -115,7 +120,7 @@ impl State for Ingame{
 	}
 
 	fn handle_events(&mut self,events: &[WindowEvent],world: &mut World,_: &mut AssetManager,_: &mut Pipeline) -> Trans{
-		use amethyst::ecs::resources::InputHandler;
+		use amethyst::ecs::resources::input::InputHandler;
 		use amethyst::ElementState;
 
 		let mut input = world.write_resource::<InputHandler>();
@@ -154,7 +159,7 @@ impl State for Pause{
 	}
 
 	fn handle_events(&mut self,events: &[WindowEvent],world: &mut World,_: &mut AssetManager,pipe: &mut Pipeline) -> Trans{
-		use amethyst::ecs::resources::InputHandler;
+		use amethyst::ecs::resources::input::InputHandler;
 		use amethyst::ElementState;
 
 		let mut input = world.write_resource::<InputHandler>();
