@@ -161,8 +161,27 @@ pub mod ingame{
 
 						//Set the values "to be changed".
 						//Resolve the collision so that it does not move into the insides of a solid
-						*new_position = Some(maybe_new_position - contact.normal.multiply_by(contact.depth.abs()));
-						*new_velocity = Some(velocity - dot(&velocity,&contact.normal)*contact.normal);
+						//*new_position = Some(maybe_new_position - contact.normal.multiply_by(contact.depth.abs()));
+						//*new_velocity = Some(velocity - dot(&velocity,&contact.normal)*contact.normal);
+
+						// This code is a shitshow. Basically, only change by the lowest value, merge x and y channels separately.
+						// Any nice matrix operations for this?
+						let mut new_vel = velocity - dot(&velocity,&contact.normal)*contact.normal;
+						if let &mut Some(new_velocity) = new_velocity {
+							new_vel[0] = if new_velocity[0].abs() < new_vel[0].abs() {new_velocity[0]} else {new_vel[0]};
+							new_vel[1] = if new_velocity[1].abs() < new_vel[1].abs() {new_velocity[1]} else {new_vel[1]};
+						}
+
+						let mut new_pos = calc_new_position(position,velocity,acceleration,delta_time) - contact.normal.multiply_by(contact.depth.abs());
+						if let &mut Some(new_position) = new_position {
+							let old_offset = new_position - position;
+							let mut new_offset = new_pos - position;
+							new_offset[0] = if old_offset[0].abs() < new_offset[0].abs() {old_offset[0]} else {new_offset[0]};
+							new_offset[1] = if old_offset[1].abs() < new_offset[1].abs() {old_offset[1]} else {new_offset[1]};
+							new_pos = new_offset + position;
+						}
+						*new_velocity = Some(new_vel);
+						*new_position = Some(new_pos);
 					}
 				}
 
