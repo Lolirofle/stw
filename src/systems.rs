@@ -9,7 +9,6 @@ pub mod ingame{
 	use *;
 
 	pub struct PlayerInput;
-	unsafe impl Sync for PlayerInput {}
 	impl<'a> System<'a> for PlayerInput {
 		type SystemData = (
 			ecs::WriteStorage<'a, components::Collision>,
@@ -56,8 +55,6 @@ pub mod ingame{
 	}
 
 	pub struct Render;
-	unsafe impl Sync for Render {}
-
 	impl<'a> System<'a> for Render {
 		type SystemData = (
 			ecs::WriteStorage<'a, LocalTransform>,
@@ -88,19 +85,21 @@ pub mod ingame{
 	}
 
 	pub struct Physics;
-	unsafe impl Sync for Physics {}
 	impl Physics{
 		pub const AIR_FRICTION: f64 = 30.0; //pixels/seconds^2
+
+		#[inline(always)]
+		pub fn new() -> Self{Physics}
 	}
 	impl<'a> System<'a> for Physics {
 		type SystemData = (
 			ecs::WriteStorage<'a, components::Collision>,
 			ecs::WriteStorage<'a, components::CollisionCache>,
 			ecs::WriteStorage<'a, components::Position>,
-			ecs::WriteStorage<'a, components::Solid>,
+			ecs::ReadStorage<'a, components::Solid>,
 			ecs::Fetch<'a, Time>
 		);
-		fn run(&mut self, (mut collisions, mut collision_caches, mut positions, mut solids, time) : Self::SystemData) {
+		fn run(&mut self, (mut collisions, mut collision_caches, mut positions, solids, time) : Self::SystemData) {
 			use alga::general::AbstractModule;
 			use nalgebra::{Isometry2,Vector2,dot,zero};
 

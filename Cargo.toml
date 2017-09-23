@@ -5,8 +5,9 @@ authors = ["Lolirofle <lolipopple@hotmail.com>"]
 
 [dependencies]
 alga     = "0.5"
-amethyst = "0.5.1"
-amethyst_renderer = "0.5.0"
+amethyst = "0.5"
+amethyst_renderer = "0.5"
+cgmath = "0.14"
 nalgebra = "0.12"
 ncollide = "0.12"
 futures = "0.1.16"

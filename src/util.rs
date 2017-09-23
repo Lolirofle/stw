@@ -2,38 +2,39 @@ use amethyst_renderer::vertex::PosNormTex;
 use nalgebra::Vector2;
 
 pub fn gen_rectangle_glvertices(w: f32,h: f32) -> Vec<PosNormTex>{
-    vec![
-        PosNormTex {
-            a_position: [-w / 2., -h / 2., 0.],
-            a_normal: [0., 0., 1.],
-            a_tex_coord: [0., 0.],
-        },
-        PosNormTex {
-            a_position: [w / 2., -h / 2., 0.],
-            a_normal: [0., 0., 1.],
-            a_tex_coord: [1., 0.],
-        },
-        PosNormTex {
-            a_position: [w / 2., h / 2., 0.],
-            a_normal: [0., 0., 1.],
-            a_tex_coord: [1., 1.],
-        },
-        PosNormTex {
-            a_position: [w / 2., h / 2., 0.],
-            a_normal: [0., 0., 1.],
-            a_tex_coord: [1., 1.],
-        },
-        PosNormTex {
-            a_position: [-w / 2., h / 2., 0.],
-            a_normal: [0., 0., 1.],
-            a_tex_coord: [1., 1.],
-        },
-        PosNormTex {
-            a_position: [-w / 2., -h / 2., 0.],
-            a_normal: [0., 0., 1.],
-            a_tex_coord: [1., 1.],
-        },
-    ]
+	vec![
+		PosNormTex {
+			a_position: [-w / 2.0, -h / 2.0, 0.0],
+			a_normal: [0.0, 0.0, 1.0],
+			a_tex_coord: [0.0, 0.0],
+		},
+		PosNormTex {
+			a_position: [w / 2.0, h / 2.0, 0.0],
+			a_normal: [0.0, 0.0, 1.0],
+			a_tex_coord: [1.0, 1.0],
+		},
+		PosNormTex {
+			a_position: [w / 2.0, -h / 2.0, 0.0],
+			a_normal: [0.0, 0.0, 1.0],
+			a_tex_coord: [1.0, 0.0],
+		},
+
+		PosNormTex {
+			a_position: [w / 2.0, h / 2.0, 0.0],
+			a_normal: [0.0, 0.0, 1.0],
+			a_tex_coord: [1.0, 1.0],
+		},
+		PosNormTex {
+			a_position: [-w / 2.0, -h / 2.0, 0.0],
+			a_normal: [0.0, 0.0, 1.0],
+			a_tex_coord: [0.0, 0.0],
+		},
+		PosNormTex {
+			a_position: [-w / 2.0, h / 2.0, 0.0],
+			a_normal: [0.0, 0.0, 1.0],
+			a_tex_coord: [0.0, 1.0],
+		},
+	]
 }
 
 pub fn vector_lengthen(v: Vector2<f64>,x: f64) -> Vector2<f64>{
@@ -52,3 +53,4 @@ pub fn vector_lengthen(v: Vector2<f64>,x: f64) -> Vector2<f64>{
 		v + v.normalize().multiply_by(x)
 	}
 }
+

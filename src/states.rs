@@ -1,16 +1,14 @@
 use amethyst::{State, Trans, Engine};
-use amethyst::ecs::World;
-use amethyst::ecs::transform::{Transform, LocalTransform, Child, Init, TransformSystem};
-use amethyst::event::{Event, WindowEvent, VirtualKeyCode, KeyboardInput};//, Camera, InputHandler, Projection, ScreenDimensions};
+use amethyst::ecs::transform::{Transform, LocalTransform, Child, Init};
+use amethyst::event::{Event, WindowEvent, VirtualKeyCode, KeyboardInput};//, Camera, InputHandler, Projection};
 use amethyst::timing::Time;
 use amethyst::input::{InputHandler};
 use amethyst::ecs::rendering::{MeshComponent, MaterialComponent, Factory};
-use amethyst_renderer::{Mesh, Texture, Pipeline, VertexFormat, Projection, Camera, MaterialBuilder};
+use amethyst_renderer::{Mesh, Texture, Projection, Camera, MaterialBuilder};
 use amethyst::assets::{AssetFuture, BoxedErr};
 use nalgebra::Vector2;
 use ncollide::shape::{Cuboid,ShapeHandle2};
 use futures::{Future, IntoFuture};
-use std::sync::Arc;
 
 use *;
 use util::gen_rectangle_glvertices;
@@ -27,11 +25,28 @@ where
 }
 
 pub struct Ingame;
+impl Ingame{
+	pub fn update_camera(engine : &mut Engine, camera: data::Camera){
+		engine.world.add_resource(Camera{
+			eye    : [0.0, 0.0, 1.0].into(),
+			proj   : Projection::orthographic(
+				(camera.translate[0] as f32),
+				(camera.translate[0] as f32) + (camera.size[0] as f32),
+				(camera.translate[1] as f32),
+				(camera.translate[1] as f32) + (camera.size[1] as f32),
+			).into(),
+			forward: [0.0, 0.0, -1.0].into(),
+			right  : [1.0, 0.0, 0.0].into(),
+			up     : [0.0, 1.0, 0.0].into(),
+		});
+	}
+}
 impl State for Ingame{
 	fn on_start(&mut self, engine: &mut Engine){
 		//Generate a square mesh
 		let tex = Texture::from_color_val([1.0, 1.0, 1.0, 1.0]);
 		let mtl = MaterialBuilder::new().with_albedo(tex);
+
 		let square_verts = gen_rectangle_glvertices(1.0, 1.0);
 		let mesh = Mesh::build(square_verts);
 
@@ -50,37 +65,59 @@ impl State for Ingame{
                 .map_err(BoxedErr::new)
 		});
 
-		let world = &mut engine.world;
-		let camera = {
-			let eye    = [0.0, 0.0, 0.1];
-			let forward = [0.0, 0.0, -1.0];
-			let up     = [0.0, 1.0, 0.0];
-			let right  = [1.0, 0.0, 0.0];
-
-			//Get an Orthographic projection
-			let proj = Projection::orthographic(0.0, 1.0, 1.0, 0.0).into();
-
-			Camera {
-				eye: eye.into(),
-				proj: proj,
-				up: up.into(),
-				right: right.into(),
-				forward: forward.into()
-			}
-		};
-
 		//Add all resources
-		world.add_resource(data::Score::new());
-		world.add_resource(InputHandler::new());
-		world.add_resource(Time::default());
+		engine.world.add_resource(data::Score::new());
+		engine.world.add_resource(data::Camera::new());
+		engine.world.add_resource(InputHandler::new());
+		engine.world.add_resource(Time::default());
 
-		world.register::<Child>();
-		world.register::<Init>();
-		world.register::<LocalTransform>();
+		engine.world.register::<Child>();
+		engine.world.register::<Init>();
+		engine.world.register::<LocalTransform>();
 
 		//Create a floor
 		{
-			world.create_entity()
+			engine.world.create_entity()
+				.with(square.clone())
+				.with(mtl.clone())
+				.with(components::Solid{typ: data::SolidType::Solid,friction: 240.0})
+				.with(components::Position(Vector2::new(0.0,0.0)))
+				.with(components::CollisionCache::new())
+				.with(components::Collision{
+					velocity         : Vector2::new(0.0,0.0),
+					acceleration     : Vector2::new(0.0,0.0),
+					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(300.0, 16.0))),
+					check_movement   : false,
+					gravity          : false,
+				})
+				.with(LocalTransform::default())
+				.with(Transform::default())
+				.build();
+		}
+
+		//Create a floor
+		{
+			engine.world.create_entity()
+				.with(square.clone())
+				.with(mtl.clone())
+				.with(components::Solid{typ: data::SolidType::Solid,friction: 240.0})
+				.with(components::Position(Vector2::new(640.0,480.0)))
+				.with(components::CollisionCache::new())
+				.with(components::Collision{
+					velocity         : Vector2::new(0.0,0.0),
+					acceleration     : Vector2::new(0.0,0.0),
+					shape            : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0, 16.0))),
+					check_movement   : false,
+					gravity          : false,
+				})
+				.with(LocalTransform::default())
+				.with(Transform::default())
+				.build();
+		}
+
+		//Create a floor
+		{
+			engine.world.create_entity()
 				.with(square.clone())
 				.with(mtl.clone())
 				.with(components::Solid{typ: data::SolidType::Solid,friction: 240.0})
@@ -100,7 +137,7 @@ impl State for Ingame{
 
 		//Create a slippery floor
 		{
-			world.create_entity()
+			engine.world.create_entity()
 				.with(square.clone())
 				.with(mtl.clone())
 				.with(components::Solid{typ: data::SolidType::Solid,friction: 60.0})
@@ -120,7 +157,7 @@ impl State for Ingame{
 
 		//Create player
 		{
-			world.create_entity()
+			engine.world.create_entity()
 				.with(square.clone())
 				.with(mtl.clone())
 				.with(components::Player{id: 0})
@@ -139,17 +176,69 @@ impl State for Ingame{
 		}
 	}
 
-	fn handle_event(&mut self, _ : &mut Engine, event: Event) -> Trans{
+	fn handle_event(&mut self, engine : &mut Engine, event: Event) -> Trans{
 		match event {
 			Event::WindowEvent { event, .. } => {
+				use amethyst::event::ElementState::*;
 				match event {
-					WindowEvent::KeyboardInput {
-						input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), ..}, ..
-					} |
-					WindowEvent::Closed => Trans::Quit,
-					WindowEvent::KeyboardInput {
-						input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Return), ..}, ..
-					} => Trans::Push(Box::new(states::Pause)),
+					WindowEvent::KeyboardInput {input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), ..}, ..} |
+					WindowEvent::Closed =>
+						Trans::Quit,
+
+					WindowEvent::KeyboardInput {input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Return), state: Pressed, ..}, ..} =>
+						Trans::Push(Box::new(states::Pause)),
+
+					WindowEvent::KeyboardInput {input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::W), state: Pressed, ..}, ..} => {
+						let data = {
+							let mut camera_data = engine.world.write_resource::<data::Camera>();
+							camera_data.translate.y-= 16.0;
+							camera_data.clone()
+						};
+						Self::update_camera(engine,data);
+						Trans::None
+					},
+
+					WindowEvent::KeyboardInput {input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::S), state: Pressed, ..}, ..} => {
+						let data = {
+							let mut camera_data = engine.world.write_resource::<data::Camera>();
+							camera_data.translate.y+= 16.0;
+							camera_data.clone()
+						};
+						Self::update_camera(engine,data);
+						Trans::None
+					},
+
+					WindowEvent::KeyboardInput {input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::A), state: Pressed, ..}, ..} => {
+						let data = {
+							let mut camera_data = engine.world.write_resource::<data::Camera>();
+							camera_data.translate.x-= 16.0;
+							camera_data.clone()
+						};
+						Self::update_camera(engine,data);
+						Trans::None
+					},
+
+					WindowEvent::KeyboardInput {input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::D), state: Pressed, ..}, ..} => {
+						let data = {
+							let mut camera_data = engine.world.write_resource::<data::Camera>();
+							camera_data.translate.x+= 16.0;
+							camera_data.clone()
+						};
+						Self::update_camera(engine,data);
+						Trans::None
+					},
+
+					WindowEvent::Resized(w,h) => {
+						let data = {
+							let mut camera_data = engine.world.write_resource::<data::Camera>();
+							camera_data.size.x = w as f64;
+							camera_data.size.y = h as f64;
+							camera_data.clone()
+						};
+						Self::update_camera(engine,data);
+						Trans::None
+					}
+
 					_ => Trans::None,
 				}
 			},
@@ -160,20 +249,20 @@ impl State for Ingame{
 
 pub struct Pause; //TODO: The world does not suspend when doing a state transition (push)
 impl State for Pause{
-	fn on_start(&mut self, _: &mut Engine) {
-	}
+	fn on_start(&mut self, _: &mut Engine) {}
+
+	fn on_stop(&mut self, _: &mut Engine) {}
 
 	fn handle_event(&mut self, _ : &mut Engine, event: Event) -> Trans {
 		match event {
 			Event::WindowEvent { event, .. } => {
+				use amethyst::event::ElementState::*;
 				match event {
-					WindowEvent::KeyboardInput {
-						input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), ..}, ..
-					} |
-					WindowEvent::Closed => Trans::Quit,
-					WindowEvent::KeyboardInput {
-						input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Return), ..}, ..
-					} => Trans::Pop,
+					WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), ..}, .. } |
+					WindowEvent::Closed =>
+						Trans::Quit,
+					WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Return), state: Pressed, ..}, .. } =>
+						Trans::Pop,
 					_ => Trans::None,
 				}
 			},
