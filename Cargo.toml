@@ -5,9 +5,9 @@ authors = ["Lolirofle <lolipopple@hotmail.com>"]
 
 [dependencies]
 alga     = "0.5"
-amethyst = "0.5"
-amethyst_input = "0.1"
-amethyst_renderer = "0.5"
 nalgebra = "0.13"
 ncollide = "0.13"
 futures = "0.1"
+amethyst = { git = "https://github.com/amethyst/amethyst", branch="develop" }
+amethyst_renderer = { git = "https://github.com/amethyst/amethyst/", branch="develop" }
+amethyst_input = { git = "https://github.com/amethyst/amethyst/", branch="develop" }
