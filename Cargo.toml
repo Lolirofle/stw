@@ -5,6 +5,9 @@ authors = ["Lolirofle <lolipopple@hotmail.com>"]
 
 [dependencies]
 alga     = "0.5"
-amethyst = {git = "https://github.com/amethyst/amethyst.git" , rev = "54af316b9ae11b7ca349ee14b16b6ffc4b48fc65"}#"0.4"
+amethyst = "0.5"
+amethyst_input = "0.1"
+amethyst_renderer = "0.5"
 nalgebra = "0.13"
 ncollide = "0.13"
+futures = "0.1"

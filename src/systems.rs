@@ -1,8 +1,9 @@
 pub mod ingame{
-	use amethyst::ecs::{Join,Fetch,System,ReadStorage,WriteStorage};
-	use amethyst::ecs::components::LocalTransform;
-	use amethyst::ecs::resources::Time;
-	use amethyst::ecs::resources::input::InputHandler;
+	use amethyst::ecs::{Join,System};
+	use amethyst::ecs::transform::LocalTransform;
+	use amethyst::ecs;
+	use amethyst::ecs::input::InputHandler;
+	use amethyst::timing::Time;
 	use std::ops::Deref;
 
 	use *;
@@ -10,15 +11,15 @@ pub mod ingame{
 	pub struct PlayerInput;
 	impl<'a> System<'a> for PlayerInput{
 		type SystemData = (
-			WriteStorage<'a,components::Solid>,
-			WriteStorage<'a,components::Player>,
-			Fetch<'a,InputHandler>,
+			ecs::WriteStorage<'a,components::Solid>,
+			ecs::WriteStorage<'a,components::Player>,
+			ecs::Fetch<'a,InputHandler>
 		);
 
 		fn run(&mut self,(mut collisions,mut players,input): Self::SystemData){
-			use amethyst::VirtualKeyCode;
-			use amethyst::ecs::resources::input::ButtonState::*;
-			use amethyst::ecs::resources::input::ChangeState::*;
+			use amethyst::event::VirtualKeyCode;
+			use amethyst_input::ButtonState::*;
+			use amethyst_input::ChangeState::*;
 
 			for(
 				ref mut player,
@@ -59,9 +60,9 @@ pub mod ingame{
 	pub struct Render;
 	impl<'a> System<'a> for Render{
 		type SystemData = (
-			ReadStorage<'a,components::Solid>,
-			ReadStorage<'a,components::Position>,
-			WriteStorage<'a,LocalTransform>,
+			ecs::ReadStorage<'a,components::Solid>,
+			ecs::ReadStorage<'a,components::Position>,
+			ecs::WriteStorage<'a,LocalTransform>
 		);
 
 		fn run(&mut self,(collisions,positions,mut locals): Self::SystemData){
@@ -82,7 +83,11 @@ pub mod ingame{
 				let len  = aabb.maxs() - aabb.mins();
 				local.translation[0] = mins[0] as f32;
 				local.translation[1] = mins[1] as f32;
-				local.scale = [len[0] as f32, len[1] as f32, 1.0];
+				local.scale = [
+					len[0] as f32,
+					len[1] as f32,
+					1.0
+				];
 			}
 		}
 	}
@@ -90,16 +95,18 @@ pub mod ingame{
 	pub struct Physics;
 	impl Physics{
 		pub const AIR_FRICTION: f64 = 30.0; //pixels/seconds^2
+
+		#[inline(always)]
+		pub fn new() -> Self{Physics}
 	}
 	impl<'a> System<'a> for Physics{
 		type SystemData = (
-			WriteStorage<'a,components::CollisionCache>,
-			WriteStorage<'a,components::Position>,
-			WriteStorage<'a,components::Solid>,
-			Fetch<'a,Time>,
+			ecs::WriteStorage<'a,components::CollisionCache>,
+			ecs::WriteStorage<'a,components::Position>,
+			ecs::WriteStorage<'a,components::Solid>,
+			ecs::Fetch<'a,Time>
 		);
-
-		fn run(&mut self,(mut collision_caches,mut positions,mut solids,time): Self::SystemData){
+		fn run(&mut self,(mut collision_caches,mut positions,mut solids,time) : Self::SystemData){
 			use alga::general::AbstractModule;
 			use nalgebra::{Isometry2,Vector2,dot,zero};
 
@@ -167,17 +174,17 @@ pub mod ingame{
 						// This code is a shitshow. Basically, only change by the lowest value, merge x and y channels separately.
 						// Any nice matrix operations for this?
 						let mut new_vel = velocity - dot(&velocity,&contact.normal)*contact.normal;
-						if let &mut Some(new_velocity) = new_velocity {
-							new_vel[0] = if new_velocity[0].abs() < new_vel[0].abs() {new_velocity[0]} else {new_vel[0]};
-							new_vel[1] = if new_velocity[1].abs() < new_vel[1].abs() {new_velocity[1]} else {new_vel[1]};
+						if let &mut Some(new_velocity) = new_velocity{
+							new_vel[0] = if new_velocity[0].abs() < new_vel[0].abs(){new_velocity[0]}else{new_vel[0]};
+							new_vel[1] = if new_velocity[1].abs() < new_vel[1].abs(){new_velocity[1]}else{new_vel[1]};
 						}
 
 						let mut new_pos = calc_new_position(position,velocity,acceleration,delta_time) - contact.normal.multiply_by(contact.depth.abs());
-						if let &mut Some(new_position) = new_position {
+						if let &mut Some(new_position) = new_position{
 							let old_offset = new_position - position;
 							let mut new_offset = new_pos - position;
-							new_offset[0] = if old_offset[0].abs() < new_offset[0].abs() {old_offset[0]} else {new_offset[0]};
-							new_offset[1] = if old_offset[1].abs() < new_offset[1].abs() {old_offset[1]} else {new_offset[1]};
+							new_offset[0] = if old_offset[0].abs() < new_offset[0].abs(){old_offset[0]}else{new_offset[0]};
+							new_offset[1] = if old_offset[1].abs() < new_offset[1].abs(){old_offset[1]}else{new_offset[1]};
 							new_pos = new_offset + position;
 						}
 						*new_velocity = Some(new_vel);
