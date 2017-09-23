@@ -17,6 +17,7 @@ use amethyst::Application;
 use amethyst_renderer::Config as DisplayConfig;
 use amethyst_renderer::{Stage, Pipeline, pass};
 use amethyst_renderer::vertex::PosNormTex;
+use amethyst::ecs::transform::TransformSystem;
 
 fn main(){
 	let cfg = {
@@ -24,20 +25,12 @@ fn main(){
 		cfg.title          = "STW3".to_owned();
 		cfg.dimensions     = Some((640,480));
 		cfg.min_dimensions = Some((640,480));
+		cfg.multisampling  = 0;
 		cfg
 	};
 	let mut game =
 		Application::build(
 			states::Ingame
-		)
-		.unwrap()
-		.with_renderer(
-			Pipeline::build().with_stage(
-				Stage::with_backbuffer()
-					.clear_target([0.0, 0.0, 0.0, 1.0], 1.0)
-					.with_model_pass(pass::DrawFlat::<PosNormTex>::new()),
-			),
-			Some(cfg)
 		)
 		.unwrap()
 		.register::<components::Solid>()
@@ -47,6 +40,17 @@ fn main(){
 		.register::<components::CollisionCache>()
 		.with::<systems::ingame::PlayerInput>(systems::ingame::PlayerInput, "input_system", &[])
 		.with::<systems::ingame::Physics>(systems::ingame::Physics, "physics_system", &[])
-		.with::<systems::ingame::Render>(systems::ingame::Render, "render_system", &[]);
+		.with::<systems::ingame::Render>(systems::ingame::Render, "render_system", &[])
+		.with::<TransformSystem>(TransformSystem::new(), "transform_system", &["physics_system"])
+		.with_renderer(
+			Pipeline::build().with_stage(
+				Stage::with_backbuffer()
+					.clear_target([0.0, 0.0, 0.0, 1.0], 1.0)
+					.with_model_pass(pass::DrawFlat::<PosNormTex>::new())
+					.with_model_pass(pass::DrawShaded::<PosNormTex>::new())
+			),
+			Some(cfg)
+		)
+		.unwrap();
 	game.build().unwrap().run();
 }

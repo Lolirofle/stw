@@ -16,7 +16,7 @@ pub mod ingame{
 			ecs::WriteStorage<'a, components::Player>,
 			ecs::Fetch<'a, InputHandler>
 		);
-		fn run(&mut self, (collisions, players, input) : Self::SystemData) {
+		fn run(&mut self, (mut collisions, mut players, input) : Self::SystemData) {
 			use amethyst::event::VirtualKeyCode;
 
 			for(
@@ -64,13 +64,13 @@ pub mod ingame{
 			ecs::ReadStorage<'a, components::Collision>,
 			ecs::ReadStorage<'a, components::Position>
 		);
-		fn run(&mut self, (locals, collisions, positions) : Self::SystemData) {
+		fn run(&mut self, (mut locals, collisions, positions) : Self::SystemData) {
 			use nalgebra::Isometry2;
 
 			for(
 				&components::Position(position),
 				&components::Collision{ref shape,..},
-				local
+				ref mut local
 			) in (
 				&positions,
 				&collisions,
@@ -100,7 +100,7 @@ pub mod ingame{
 			ecs::WriteStorage<'a, components::Solid>,
 			ecs::Fetch<'a, Time>
 		);
-		fn run(&mut self, (collisions, collision_caches, positions, solids, time) : Self::SystemData) {
+		fn run(&mut self, (mut collisions, mut collision_caches, mut positions, mut solids, time) : Self::SystemData) {
 			use alga::general::AbstractModule;
 			use nalgebra::{Isometry2,Vector2,dot,zero};
 

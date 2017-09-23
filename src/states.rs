@@ -1,14 +1,16 @@
 use amethyst::{State, Trans, Engine};
 use amethyst::ecs::World;
-use amethyst::ecs::transform::{Transform, LocalTransform};
+use amethyst::ecs::transform::{Transform, LocalTransform, Child, Init, TransformSystem};
 use amethyst::event::{Event, WindowEvent, VirtualKeyCode, KeyboardInput};//, Camera, InputHandler, Projection, ScreenDimensions};
+use amethyst::timing::Time;
 use amethyst::input::{InputHandler};
-use amethyst::ecs::rendering::{MeshComponent, MaterialComponent};
-use amethyst_renderer::{Mesh, Texture, Pipeline, VertexFormat, Projection, Camera, MaterialBuilder, Factory};
+use amethyst::ecs::rendering::{MeshComponent, MaterialComponent, Factory};
+use amethyst_renderer::{Mesh, Texture, Pipeline, VertexFormat, Projection, Camera, MaterialBuilder};
 use amethyst::assets::{AssetFuture, BoxedErr};
 use nalgebra::Vector2;
 use ncollide::shape::{Cuboid,ShapeHandle2};
 use futures::{Future, IntoFuture};
+use std::sync::Arc;
 
 use *;
 use util::gen_rectangle_glvertices;
@@ -27,6 +29,27 @@ where
 pub struct Ingame;
 impl State for Ingame{
 	fn on_start(&mut self, engine: &mut Engine){
+		//Generate a square mesh
+		let tex = Texture::from_color_val([1.0, 1.0, 1.0, 1.0]);
+		let mtl = MaterialBuilder::new().with_albedo(tex);
+		let square_verts = gen_rectangle_glvertices(1.0, 1.0);
+		let mesh = Mesh::build(square_verts);
+
+		let square = load_proc_asset(engine, move |engine| {
+            let factory = engine.world.read_resource::<Factory>();
+            factory.create_mesh(mesh).map(MeshComponent::new).map_err(
+                BoxedErr::new,
+            )
+        });
+
+		let mtl = load_proc_asset(engine, move |engine| {
+            let factory = engine.world.read_resource::<Factory>();
+            factory
+                .create_material(mtl)
+                .map(MaterialComponent)
+                .map_err(BoxedErr::new)
+		});
+
 		let world = &mut engine.world;
 		let camera = {
 			let eye    = [0.0, 0.0, 0.1];
@@ -49,27 +72,11 @@ impl State for Ingame{
 		//Add all resources
 		world.add_resource(data::Score::new());
 		world.add_resource(InputHandler::new());
+		world.add_resource(Time::default());
 
-		//Generate a square mesh
-		let tex = Texture::from_color_val([1.0, 1.0, 1.0, 1.0]);
-		let mtl = MaterialBuilder::new().with_albedo(tex);
-		let square_verts = gen_rectangle_glvertices(1.0, 1.0);
-		let mesh = Mesh::build(square_verts);
-
-		let square = load_proc_asset(engine, move |engine| {
-            let factory = engine.world.read_resource::<Factory>();
-            factory.create_mesh(mesh).map(MeshComponent::new).map_err(
-                BoxedErr::new,
-            )
-        });
-
-		let mtl = load_proc_asset(engine, move |engine| {
-            let factory = engine.world.read_resource::<Factory>();
-            factory
-                .create_material(mtl)
-                .map(MaterialComponent)
-                .map_err(BoxedErr::new)
-		});
+		world.register::<Child>();
+		world.register::<Init>();
+		world.register::<LocalTransform>();
 
 		//Create a floor
 		{
