@@ -1,66 +1,81 @@
-use amethyst::{Event, State, Trans, VirtualKeyCode, WindowEvent};
-use amethyst::asset_manager::AssetManager;
+use amethyst::{State, Trans, Engine};
 use amethyst::ecs::World;
-use amethyst::ecs::components::{Mesh, LocalTransform, Texture, Transform};
-use amethyst::renderer::{Pipeline, VertexPosNormal};
+use amethyst::ecs::transform::{Transform, LocalTransform};
+use amethyst::event::{Event, WindowEvent, VirtualKeyCode, KeyboardInput};//, Camera, InputHandler, Projection, ScreenDimensions};
+use amethyst::input::{InputHandler};
+use amethyst::ecs::rendering::{MeshComponent, MaterialComponent};
+use amethyst_renderer::{Mesh, Texture, Pipeline, VertexFormat, Projection, Camera, MaterialBuilder, Factory};
+use amethyst::assets::{AssetFuture, BoxedErr};
 use nalgebra::Vector2;
 use ncollide::shape::{Cuboid,ShapeHandle2};
+use futures::{Future, IntoFuture};
 
 use *;
+use util::gen_rectangle_glvertices;
+
+fn load_proc_asset<T, F>(engine: &mut Engine, f: F) -> AssetFuture<T::Item>
+where
+    T: IntoFuture<Error = BoxedErr>,
+    T::Future: 'static,
+    F: FnOnce(&mut Engine) -> T,
+{
+    let future = f(engine).into_future();
+    let future: Box<Future<Item = T::Item, Error = BoxedErr>> = Box::new(future);
+    AssetFuture(future.shared())
+}
 
 pub struct Ingame;
 impl State for Ingame{
-	fn on_start(&mut self, world: &mut World, assets: &mut AssetManager, pipe: &mut Pipeline){
-		use amethyst::ecs::Gate;
-		use amethyst::ecs::resources::{Camera, InputHandler, Projection, ScreenDimensions};
-		use amethyst::renderer::Layer;
-		use amethyst::renderer::pass::{Clear, DrawFlat};
-
-		let layer = Layer::new("main",vec![
-			Clear::new([0.0, 0.0, 0.0, 1.0]),
-			DrawFlat::new("main", "main")
-		]);
-
-		pipe.layers.push(layer);
-
-		{
-			let dim = world.read_resource::<ScreenDimensions>().pass();
-			let mut camera = world.write_resource::<Camera>().pass();
+	fn on_start(&mut self, engine: &mut Engine){
+		let world = &mut engine.world;
+		let camera = {
 			let eye    = [0.0, 0.0, 0.1];
-			let target = [0.0, 0.0, 0.0];
+			let forward = [0.0, 0.0, -1.0];
 			let up     = [0.0, 1.0, 0.0];
+			let right  = [1.0, 0.0, 0.0];
 
 			//Get an Orthographic projection
-			let proj = Projection::Orthographic{
-				left  :  0.0 ,
-				right :  dim.w,
-				bottom:  dim.h,
-				top   :  0.0,
-				near  :  0.0,
-				far   :  1.0,
-			};
+			let proj = Projection::orthographic(0.0, 1.0, 1.0, 0.0).into();
 
-			camera.proj   = proj;
-			camera.eye    = eye;
-			camera.target = target;
-			camera.up     = up;
-		}
+			Camera {
+				eye: eye.into(),
+				proj: proj,
+				up: up.into(),
+				right: right.into(),
+				forward: forward.into()
+			}
+		};
 
 		//Add all resources
-		world.add_resource::<data::Score>(data::Score::new());
-		world.add_resource::<InputHandler>(InputHandler::new());
+		world.add_resource(data::Score::new());
+		world.add_resource(InputHandler::new());
 
 		//Generate a square mesh
-		assets.register_asset::<Mesh>();
-		assets.register_asset::<Texture>();
-		assets.load_asset_from_data::<Texture, [f32; 4]>("white", [1.0, 1.0, 1.0, 1.0]);
-		assets.load_asset_from_data::<Mesh, Vec<VertexPosNormal>>("square", util::gen_rectangle_glvertices(1.0, 1.0));
-		let square = assets.create_renderable("square", "white", "white", "white", 1.0).unwrap();
+		let tex = Texture::from_color_val([1.0, 1.0, 1.0, 1.0]);
+		let mtl = MaterialBuilder::new().with_albedo(tex);
+		let square_verts = gen_rectangle_glvertices(1.0, 1.0);
+		let mesh = Mesh::build(square_verts);
+
+		let square = load_proc_asset(engine, move |engine| {
+            let factory = engine.world.read_resource::<Factory>();
+            factory.create_mesh(mesh).map(MeshComponent::new).map_err(
+                BoxedErr::new,
+            )
+        });
+
+		let mtl = load_proc_asset(engine, move |engine| {
+            let factory = engine.world.read_resource::<Factory>();
+            factory
+                .create_material(mtl)
+                .map(MaterialComponent)
+                .map_err(BoxedErr::new)
+		});
 
 		//Create a floor
 		{
-			world.create_now()
+			world.create_entity()
 				.with(square.clone())
+				.with(mtl.clone())
 				.with(components::Solid{typ: data::SolidType::Solid,friction: 240.0})
 				.with(components::Position(Vector2::new(200.0,400.0)))
 				.with(components::CollisionCache::new())
@@ -78,8 +93,9 @@ impl State for Ingame{
 
 		//Create a slippery floor
 		{
-			world.create_now()
+			world.create_entity()
 				.with(square.clone())
+				.with(mtl.clone())
 				.with(components::Solid{typ: data::SolidType::Solid,friction: 60.0})
 				.with(components::Position(Vector2::new(420.0,360.0)))
 				.with(components::CollisionCache::new())
@@ -97,8 +113,9 @@ impl State for Ingame{
 
 		//Create player
 		{
-			world.create_now()
+			world.create_entity()
 				.with(square.clone())
+				.with(mtl.clone())
 				.with(components::Player{id: 0})
 				.with(components::Position(Vector2::new(500.0,100.0)))
 				.with(components::CollisionCache::new())
@@ -115,69 +132,45 @@ impl State for Ingame{
 		}
 	}
 
-	fn handle_events(&mut self,events: &[WindowEvent],world: &mut World,_: &mut AssetManager,_: &mut Pipeline) -> Trans{
-		use amethyst::ecs::Gate;
-		use amethyst::ecs::resources::InputHandler;
-		use amethyst::ElementState;
-
-		let input = world.write_resource::<InputHandler>();
-		input.pass().update(events);
-
-		let mut state_transition = Trans::None;
-		for e in events{
-			match **e{
-				Event::KeyboardInput(_,_,Some(VirtualKeyCode::Escape)) |
-				Event::Closed => {
-					state_transition = Trans::Quit;
-				},
-				Event::KeyboardInput(ElementState::Pressed,_,Some(VirtualKeyCode::Return)) => {
-					state_transition = Trans::Push(Box::new(states::Pause));
-				},
-				_ => {},
-			}
+	fn handle_event(&mut self, _ : &mut Engine, event: Event) -> Trans{
+		match event {
+			Event::WindowEvent { event, .. } => {
+				match event {
+					WindowEvent::KeyboardInput {
+						input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), ..}, ..
+					} |
+					WindowEvent::Closed => Trans::Quit,
+					WindowEvent::KeyboardInput {
+						input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Return), ..}, ..
+					} => Trans::Push(Box::new(states::Pause)),
+					_ => Trans::None,
+				}
+			},
+			_ => Trans::None,
 		}
-
-		state_transition
 	}
 }
 
 pub struct Pause; //TODO: The world does not suspend when doing a state transition (push)
 impl State for Pause{
-	fn on_start(&mut self, _world: &mut World, _assets: &mut AssetManager, pipe: &mut Pipeline){
-		use amethyst::renderer::Layer;
-		use amethyst::renderer::pass::{Clear, DrawFlat};
-
-		let layer = Layer::new("main",vec![
-			Clear::new([0.2, 0.2, 0.2, 1.0]),
-			DrawFlat::new("main", "main")
-		]);
-
-		pipe.layers.push(layer);
+	fn on_start(&mut self, _: &mut Engine) {
 	}
 
-	fn handle_events(&mut self,events: &[WindowEvent],world: &mut World,_: &mut AssetManager,pipe: &mut Pipeline) -> Trans{
-		use amethyst::ecs::Gate;
-		use amethyst::ecs::resources::InputHandler;
-		use amethyst::ElementState;
-
-		let input = world.write_resource::<InputHandler>();
-		input.pass().update(events);
-
-		let mut state_transition = Trans::None;
-		for e in events{
-			match **e{
-				Event::KeyboardInput(_,_,Some(VirtualKeyCode::Escape)) |
-				Event::Closed => {
-					state_transition = Trans::Quit;
-				},
-				Event::KeyboardInput(ElementState::Pressed,_,Some(VirtualKeyCode::Return)) => {
-					state_transition = Trans::Pop;
-					pipe.layers.pop();
-				},
-				_ => {},
-			}
+	fn handle_event(&mut self, _ : &mut Engine, event: Event) -> Trans {
+		match event {
+			Event::WindowEvent { event, .. } => {
+				match event {
+					WindowEvent::KeyboardInput {
+						input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), ..}, ..
+					} |
+					WindowEvent::Closed => Trans::Quit,
+					WindowEvent::KeyboardInput {
+						input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Return), ..}, ..
+					} => Trans::Pop,
+					_ => Trans::None,
+				}
+			},
+			_ => Trans::None,
 		}
-
-		state_transition
 	}
 }

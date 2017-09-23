@@ -1,25 +1,23 @@
 pub mod ingame{
-	use amethyst::ecs::{Join, RunArg, System};
-	use amethyst::ecs::Gate;
+	use amethyst::ecs::{Join, System};
+	use amethyst::ecs::transform::LocalTransform;
+	use amethyst::ecs;
+	use amethyst::ecs::input::InputHandler;
+	use amethyst::timing::Time;
 	use std::ops::Deref;
 
 	use *;
 
 	pub struct PlayerInput;
 	unsafe impl Sync for PlayerInput {}
-	impl System<()> for PlayerInput {
-		fn run(&mut self, arg: RunArg, _: ()) {
-			use amethyst::ecs::resources::InputHandler;
-			use amethyst::VirtualKeyCode;
-
-			let (collisions, players, input) = arg.fetch(|w| {(
-				w.write::<components::Collision>(),
-				w.write::<components::Player>(),
-				w.read_resource::<InputHandler>(),
-			)});
-
-			let mut players = players.pass();
-			let mut collisions = collisions.pass();
+	impl<'a> System<'a> for PlayerInput {
+		type SystemData = (
+			ecs::WriteStorage<'a, components::Collision>,
+			ecs::WriteStorage<'a, components::Player>,
+			ecs::Fetch<'a, InputHandler>
+		);
+		fn run(&mut self, (collisions, players, input) : Self::SystemData) {
+			use amethyst::event::VirtualKeyCode;
 
 			for(
 				ref mut player,
@@ -30,24 +28,24 @@ pub mod ingame{
 			).join(){
 				match player.id{
 					1 =>{
-						if input.key_down(VirtualKeyCode::W){
+						if input.keys_down(&[VirtualKeyCode::W]){
 							velocity[1] = -200.0;
 						}
-						if input.key_down(VirtualKeyCode::A){
+						if input.keys_down(&[VirtualKeyCode::A]){
 							velocity[0] = -100.0;
 						}
-						if input.key_down(VirtualKeyCode::D){
+						if input.keys_down(&[VirtualKeyCode::D]){
 							velocity[0] = 100.0;
 						}
 					}
 					0 =>{
-						if input.key_down(VirtualKeyCode::Up){
+						if input.keys_down(&[VirtualKeyCode::Up]){
 							velocity[1] = -200.0;
 						}
-						if input.key_down(VirtualKeyCode::Left){
+						if input.keys_down(&[VirtualKeyCode::Left]){
 							velocity[0] = -100.0;
 						}
-						if input.key_down(VirtualKeyCode::Right){
+						if input.keys_down(&[VirtualKeyCode::Right]){
 							velocity[0] = 100.0;
 						}
 					}
@@ -59,30 +57,25 @@ pub mod ingame{
 
 	pub struct Render;
 	unsafe impl Sync for Render {}
-	impl System<()> for Render {
-		fn run(&mut self, arg: RunArg, _: ()) {
-			use amethyst::ecs::components::LocalTransform;
+
+	impl<'a> System<'a> for Render {
+		type SystemData = (
+			ecs::WriteStorage<'a, LocalTransform>,
+			ecs::ReadStorage<'a, components::Collision>,
+			ecs::ReadStorage<'a, components::Position>
+		);
+		fn run(&mut self, (locals, collisions, positions) : Self::SystemData) {
 			use nalgebra::Isometry2;
-
-			let (collisions, positions, locals) = arg.fetch(|w| {(
-				w.read::<components::Collision>(),
-				w.read::<components::Position>(),
-				w.write::<LocalTransform>()
-			)});
-
-			let collisions = collisions.pass();
-			let positions  = positions.pass();
-			let mut locals = locals.pass();
 
 			for(
 				&components::Position(position),
 				&components::Collision{ref shape,..},
-				ref mut local
+				local
 			) in (
 				&positions,
 				&collisions,
 				&mut locals
-			).join(){
+			).join() {
 				//Update the renderable corresponding to this entity
 				let aabb = shape.aabb(&Isometry2::new(position,0.0));
 				let mins = aabb.center();
@@ -99,34 +92,21 @@ pub mod ingame{
 	impl Physics{
 		pub const AIR_FRICTION: f64 = 30.0; //pixels/seconds^2
 	}
-	impl System<()> for Physics {
-		fn run(&mut self, arg: RunArg, _: ()) {
+	impl<'a> System<'a> for Physics {
+		type SystemData = (
+			ecs::WriteStorage<'a, components::Collision>,
+			ecs::WriteStorage<'a, components::CollisionCache>,
+			ecs::WriteStorage<'a, components::Position>,
+			ecs::WriteStorage<'a, components::Solid>,
+			ecs::Fetch<'a, Time>
+		);
+		fn run(&mut self, (collisions, collision_caches, positions, solids, time) : Self::SystemData) {
 			use alga::general::AbstractModule;
-			use amethyst::ecs::resources::Time;
 			use nalgebra::{Isometry2,Vector2,dot,zero};
 
 			use util;
 
-			let (
-				collisions,
-				collision_caches,
-				positions,
-				solids,
-				time,
-			) = arg.fetch(|w| {(
-				w.write::<components::Collision>(),
-				w.write::<components::CollisionCache>(),
-				w.write::<components::Position>(),
-				w.read::<components::Solid>(),
-				w.read_resource::<Time>(),
-			)});
-
 			let delta_time = time.delta_time.subsec_nanos() as f64 / 1.0e9;
-
-			let mut collisions       = collisions.pass();
-			let mut collision_caches = collision_caches.pass();
-			let mut positions        = positions.pass();
-			let     solids           = solids.pass();
 
 			//Step movement (using something like Velocity Verlet Integration), and process collision checking
 			for(
