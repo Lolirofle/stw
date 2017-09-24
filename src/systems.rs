@@ -14,25 +14,30 @@ pub mod ingame{
 		type SystemData = (
 			ecs::WriteStorage<'a,components::Solid>,
 			ecs::WriteStorage<'a,components::Player>,
+			ecs::ReadStorage<'a,components::CollisionCache>,
 			ecs::Fetch<'a,InputHandler>
 		);
 
-		fn run(&mut self,(mut collisions,mut players,input): Self::SystemData){
+		fn run(&mut self,(mut collisions,mut players,collision_caches,input): Self::SystemData){
 			use amethyst::event::VirtualKeyCode;
 			use amethyst_input::ButtonState::*;
 			use amethyst_input::ChangeState::*;
 
 			for(
 				ref mut player,
-				&mut components::Solid{ref mut velocity,..},
+				&mut components::Solid{ref mut velocity,ref mut acceleration,..},
+				&components::CollisionCache{ref position_resolve,..},
 			) in (
 				&mut players,
 				&mut collisions,
+				&collision_caches,
 			).join(){
 				match player.id{
 					1 =>{
 						if input.key_is(VirtualKeyCode::W,Pressed(ThisFrame)){
-							velocity[1] = -200.0;
+							if position_resolve[1] > 0.0{
+								velocity[1] = -320.0;
+							}
 						}
 						if input.key_is(VirtualKeyCode::A,Pressed(Currently)){
 							velocity[0] = -100.0;
@@ -43,7 +48,9 @@ pub mod ingame{
 					}
 					0 =>{
 						if input.key_is(VirtualKeyCode::Up,Pressed(ThisFrame)){
-							velocity[1] = -200.0;
+							if position_resolve[1] < 0.0{
+								velocity[1] = -320.0;
+							}
 						}
 						if input.key_is(VirtualKeyCode::Left,Pressed(Currently)){
 							velocity[0] = -100.0;
