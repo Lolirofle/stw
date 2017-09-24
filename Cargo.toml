@@ -8,6 +8,6 @@ alga     = "0.5"
 nalgebra = "0.13"
 ncollide = "0.13"
 futures = "0.1"
-amethyst = { git = "https://github.com/amethyst/amethyst", branch="develop" }
-amethyst_renderer = { git = "https://github.com/amethyst/amethyst/", branch="develop" }
-amethyst_input = { git = "https://github.com/amethyst/amethyst/", branch="develop" }
+amethyst          = { git = "https://github.com/amethyst/amethyst.git", rev="43ce58a5e3f8ef0e2a259f4dda8197d89a4ff7d2"}
+amethyst_renderer = { git = "https://github.com/amethyst/amethyst.git", rev="43ce58a5e3f8ef0e2a259f4dda8197d89a4ff7d2"}
+amethyst_input    = { git = "https://github.com/amethyst/amethyst.git", rev="43ce58a5e3f8ef0e2a259f4dda8197d89a4ff7d2"}
