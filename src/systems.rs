@@ -164,7 +164,7 @@ pub mod ingame{
 					//Check for every other existing object
 					for(
 						&components::Position(other_pos),
-						&components::Solid{friction,shape: ref other_shape, velocity: ref other_velocity, ..},
+						&components::Solid{friction,shape: ref other_shape, velocity: ref other_velocity, old_position: ref other_old_position, ..},
 					) in (
 						&positions,
 						&solids,
@@ -189,7 +189,7 @@ pub mod ingame{
 							*velocity_resolve-= dot(&this_vel,&contact.normal)*contact.normal;
 							*position_resolve-= contact.normal.multiply_by(contact.depth.abs());
 							if dot(other_velocity, &contact.normal) >= 0.0 {
-								*position_resolve += other_velocity*delta_time;
+								*position_resolve += other_pos - other_old_position;
 							}
 						}
 					}
