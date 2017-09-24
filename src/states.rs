@@ -132,6 +132,27 @@ impl State for Ingame{
 				.build();
 		}
 
+		//Create a moving platform
+		{
+			engine.world.create_entity()
+				.with(square_mesh.clone())
+				.with(square_mtl.clone())
+				.with(components::Position(Vector2::new(0.0,250.0)))
+				.with(components::Solid{
+					velocity: Vector2::new(40.0,0.0),
+					..components::Solid::new(
+						data::SolidType::Solid,
+						false,
+						false,
+						500.0,
+						ShapeHandle2::new(Cuboid::new(Vector2::new(100.0,8.0))),
+					)
+				})
+				.with(LocalTransform::default())
+				.with(Transform::default())
+				.build();
+		}
+
 		//Create a slippery floor
 		{
 			engine.world.create_entity()
