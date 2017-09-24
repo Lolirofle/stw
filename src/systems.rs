@@ -147,7 +147,7 @@ pub mod ingame{
 			//Process collision checking
 			for(
 				&components::Position(this_pos),
-				&components::Solid{velocity: this_vel,shape: ref this_shape,check_movement,friction: this_friction,..},
+				&components::Solid{velocity: ref this_vel,shape: ref this_shape,check_movement,friction: this_friction,..},
 				&mut components::CollisionCache{ref mut position_resolve,ref mut velocity_resolve,ref mut friction_total,..},
 			) in (
 				&positions,
@@ -164,7 +164,7 @@ pub mod ingame{
 					//Check for every other existing object
 					for(
 						&components::Position(other_pos),
-						&components::Solid{friction: other_friction,shape: ref other_shape,velocity: other_vel,..},
+						&components::Solid{friction: other_friction,shape: ref other_shape,velocity: ref other_vel,..},
 					) in (
 						&positions,
 						&solids,
@@ -187,7 +187,7 @@ pub mod ingame{
 
 							//Combine with other possible collision resolvements
 							//Subtracts the velocity projected on the contact normal (TODO: Stops when moving towards edge while falling/jumping)
-							*velocity_resolve+= -dot(&this_vel,&contact.normal)*contact.normal;
+							*velocity_resolve+= -dot(&(*this_vel - *other_vel),&contact.normal)*contact.normal;
 							//Subtracts the position by the contact depth.
 							//Both object tries to resolve the contact, and how much each of them resolves depends on the ratio of how much each contributed to the contact based on the velocity (TODO: Not really. It just uses their velocities instead of checking how much it contributed to the contact. Is this noticeable? Maybe it differs when changing the time step?)
 							*position_resolve+= -contact.normal.multiply_by((this_vel.norm_squared()/(this_vel.norm_squared()+other_vel.norm_squared()) * contact.depth).abs());
