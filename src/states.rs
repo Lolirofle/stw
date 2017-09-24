@@ -101,18 +101,20 @@ impl State for Ingame{
 		}
 
 		//Create a floor
+		let mut floor = components::Solid::new(
+			data::SolidType::Solid,
+			false,
+			false,
+			240.0,
+			ShapeHandle2::new(Cuboid::new(Vector2::new(150.0,16.0))),
+		);
+		floor.velocity[0] = 40.0;
 		{
 			engine.world.create_entity()
 				.with(square.clone())
 				.with(mtl.clone())
 				.with(components::Position(Vector2::new(200.0,400.0)))
-				.with(components::Solid::new(
-					data::SolidType::Solid,
-					false,
-					false,
-					240.0,
-					ShapeHandle2::new(Cuboid::new(Vector2::new(150.0,16.0))),
-				))
+				.with(floor)
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();

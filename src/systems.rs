@@ -164,7 +164,7 @@ pub mod ingame{
 					//Check for every other existing object
 					for(
 						&components::Position(other_pos),
-						&components::Solid{friction,shape: ref other_shape,..},
+						&components::Solid{friction,shape: ref other_shape, velocity: ref other_velocity, ..},
 					) in (
 						&positions,
 						&solids,
@@ -188,6 +188,9 @@ pub mod ingame{
 							//Combine with other possible collision resolvements
 							*velocity_resolve-= dot(&this_vel,&contact.normal)*contact.normal;
 							*position_resolve-= contact.normal.multiply_by(contact.depth.abs());
+							if dot(other_velocity, &contact.normal) >= 0.0 {
+								*position_resolve += other_velocity*delta_time;
+							}
 						}
 					}
 				}
