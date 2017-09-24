@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use amethyst;
 use amethyst::assets::{AssetFuture,BoxedErr};
 use amethyst_renderer::vertex::PosNormTex;
@@ -51,6 +53,11 @@ pub fn vector_lengthen(v: Vector2<f64>,x: f64) -> Vector2<f64>{
 		//Add/remove to the length
 		v + v.normalize().multiply_by(x)
 	}
+}
+
+#[inline(always)]
+pub fn vector_perpendicular(v: Vector2<f64>) -> Vector2<f64>{
+	Vector2::new(-v[1],v[0])
 }
 
 pub fn load_proc_asset<T,F>(engine: &mut amethyst::Engine,f: F) -> AssetFuture<T::Item> where

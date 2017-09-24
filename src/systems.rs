@@ -25,7 +25,7 @@ pub mod ingame{
 
 			for(
 				ref mut player,
-				&mut components::Solid{ref mut velocity,ref mut acceleration,..},
+				&mut components::Solid{ref mut velocity,..},
 				&components::CollisionCache{ref position_resolve,..},
 			) in (
 				&mut players,
@@ -33,29 +33,29 @@ pub mod ingame{
 				&collision_caches,
 			).join(){
 				match player.id{
-					1 =>{
-						if input.key_is(VirtualKeyCode::W,Pressed(ThisFrame)){
-							if position_resolve[1] > 0.0{
-								velocity[1] = -320.0;
-							}
-						}
-						if input.key_is(VirtualKeyCode::A,Pressed(Currently)){
-							velocity[0] = -100.0;
-						}
-						if input.key_is(VirtualKeyCode::D,Pressed(Currently)){
-							velocity[0] = 100.0;
-						}
-					}
 					0 =>{
 						if input.key_is(VirtualKeyCode::Up,Pressed(ThisFrame)){
 							if position_resolve[1] < 0.0{
-								velocity[1] = -320.0;
+								velocity[1] = -340.0;
 							}
 						}
 						if input.key_is(VirtualKeyCode::Left,Pressed(Currently)){
 							velocity[0] = -100.0;
 						}
 						if input.key_is(VirtualKeyCode::Right,Pressed(Currently)){
+							velocity[0] = 100.0;
+						}
+					}
+					1 =>{
+						if input.key_is(VirtualKeyCode::W,Pressed(ThisFrame)){
+							if position_resolve[1] < 0.0{
+								velocity[1] = -340.0;
+							}
+						}
+						if input.key_is(VirtualKeyCode::A,Pressed(Currently)){
+							velocity[0] = -100.0;
+						}
+						if input.key_is(VirtualKeyCode::D,Pressed(Currently)){
 							velocity[0] = 100.0;
 						}
 					}
@@ -102,7 +102,7 @@ pub mod ingame{
 
 	pub struct Physics;
 	impl Physics{
-		pub const AIR_FRICTION: f64 = 30.0; //pixels/seconds^2
+		pub const AIR_FRICTION: f64 = 20.0; //pixels/seconds^2
 
 		#[inline(always)]
 		pub fn new() -> Self{Physics}
@@ -147,7 +147,7 @@ pub mod ingame{
 			//Process collision checking
 			for(
 				&components::Position(this_pos),
-				&components::Solid{velocity: this_vel,shape: ref this_shape,check_movement,..},
+				&components::Solid{velocity: this_vel,shape: ref this_shape,check_movement,friction: this_friction,..},
 				&mut components::CollisionCache{ref mut position_resolve,ref mut velocity_resolve,ref mut friction_total,..},
 			) in (
 				&positions,
@@ -164,7 +164,7 @@ pub mod ingame{
 					//Check for every other existing object
 					for(
 						&components::Position(other_pos),
-						&components::Solid{friction,shape: ref other_shape,..},
+						&components::Solid{friction: other_friction,shape: ref other_shape,velocity: other_vel,..},
 					) in (
 						&positions,
 						&solids,
@@ -183,11 +183,14 @@ pub mod ingame{
 							0.0
 						){
 							//Friction (Solid)
-							*friction_total+= friction;
+							*friction_total+= this_friction + other_friction;
 
 							//Combine with other possible collision resolvements
-							*velocity_resolve-= dot(&this_vel,&contact.normal)*contact.normal;
-							*position_resolve-= contact.normal.multiply_by(contact.depth.abs());
+							//Subtracts the velocity projected on the contact normal (TODO: Stops when moving towards edge while falling/jumping)
+							*velocity_resolve+= -dot(&this_vel,&contact.normal)*contact.normal;
+							//Subtracts the position by the contact depth.
+							//Both object tries to resolve the contact, and how much each of them resolves depends on the ratio of how much each contributed to the contact based on the velocity (TODO: Not really. It just uses their velocities instead of checking how much it contributed to the contact. Is this noticeable? Maybe it differs when changing the time step?)
+							*position_resolve+= -contact.normal.multiply_by((this_vel.norm_squared()/(this_vel.norm_squared()+other_vel.norm_squared()) * contact.depth).abs());
 						}
 					}
 				}

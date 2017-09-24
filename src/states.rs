@@ -148,7 +148,7 @@ impl State for Ingame{
 					data::SolidType::Solid,
 					true,
 					true,
-					1000.0,
+					50.0,
 					ShapeHandle2::new(Cuboid::new(Vector2::new(16.0,32.0))),
 				))
 				.with(LocalTransform::default())
@@ -157,7 +157,7 @@ impl State for Ingame{
 		}
 
 		//Create player
-		/*{
+		{
 			engine.world.create_entity()
 				.with(square.clone())
 				.with(mtl.clone())
@@ -168,13 +168,13 @@ impl State for Ingame{
 					data::SolidType::Solid,
 					true,
 					true,
-					4000.0,
+					50.0,
 					ShapeHandle2::new(Cuboid::new(Vector2::new(16.0,32.0))),
 				))
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
-		}*/
+		}
 	}
 
 	fn handle_event(&mut self,engine : &mut Engine,event: Event) -> Trans{

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use nalgebra::Vector2;
 
 #[derive(Copy,Clone,PartialEq)]

@@ -34,10 +34,10 @@ pub struct Solid{
 
 	//Movement data
 	pub velocity      : Vector2<f64>,
-	pub acceleration  : Vector2<f64>,//TODO: Consider having a function that calculates acceleration instead from all its components (but I cannot find a way to implement it organized). An alternative could be to have a temporary acceleration variable for each step.
+	pub acceleration  : Vector2<f64>,//TODO: This is not used in the same way as velocity is. It is rather a temporary acceleration variable for each step.
 
 	//Movement data from the previous step
-	pub old_position    : Vector2<f64>, //TODO: This may not be neccessary
+	pub old_position    : Vector2<f64>, //TODO: These may not be neccessary? Or maybe they are?
 	pub old_velocity    : Vector2<f64>,
 	pub old_acceleration: Vector2<f64>,
 }
