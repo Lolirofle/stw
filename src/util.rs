@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
 use amethyst;
-use amethyst::assets::{AssetFuture,BoxedErr};
-use amethyst_renderer::vertex::PosNormTex;
+use amethyst::assets::{AssetFuture,BoxedErr,Context,Format,Loader};
+use amethyst::ecs::rendering::{MaterialComponent,TextureContext};
+use amethyst::renderer::vertex::PosNormTex;
 use futures::{Future,IntoFuture};
 use nalgebra::Vector2;
 
@@ -68,4 +69,22 @@ pub fn load_proc_asset<T,F>(engine: &mut amethyst::Engine,f: F) -> AssetFuture<T
 	let future = f(engine).into_future();
 	let future: Box<Future<Item = T::Item , Error = BoxedErr>> = Box::new(future);
 	AssetFuture(future.shared())
+}
+
+pub fn load_material<F>(engine: &mut amethyst::Engine,albedo: &str,format: F) -> AssetFuture<MaterialComponent> where
+	F: Format + 'static,
+	F::Data: Into<<TextureContext as Context>::Data>,
+{
+	use amethyst::ecs::rendering::{Factory,TextureComponent};
+	use amethyst::renderer::MaterialBuilder;
+
+	let future = engine.world.read_resource::<Factory>()
+		.create_material(MaterialBuilder::new())
+		.map_err(BoxedErr::new)
+		.join(engine.world.read_resource::<Loader>().load_from::<TextureComponent,_,_,_>(albedo,format,"resources"))
+		.map(|(mut mtl,albedo)|{
+			mtl.albedo = albedo.0.inner();
+			MaterialComponent(mtl)
+		});
+	AssetFuture::from_future(future)
 }

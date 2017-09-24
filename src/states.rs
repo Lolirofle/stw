@@ -1,17 +1,17 @@
 use amethyst::{State,Trans,Engine};
+use amethyst::assets::BoxedErr;
+use amethyst::ecs::rendering::{MeshComponent,MaterialComponent,Factory};
 use amethyst::ecs::transform::{Transform,LocalTransform,Child,Init};
 use amethyst::event::{Event,WindowEvent,VirtualKeyCode,KeyboardInput};
-use amethyst::timing::Time;
 use amethyst::input::InputHandler;
-use amethyst::ecs::rendering::{MeshComponent,MaterialComponent,Factory};
-use amethyst_renderer::{Mesh,Texture,Projection,Camera,MaterialBuilder};
-use amethyst::assets::BoxedErr;
+use amethyst::renderer::{Mesh,Texture,Projection,Camera,MaterialBuilder};
+use amethyst::timing::Time;
 
 use *;
 
 pub struct Ingame;
 impl Ingame{
-	pub fn update_camera(engine : &mut Engine,camera: data::Camera){
+	pub fn update_camera(engine: &mut Engine,camera: data::Camera){
 		engine.world.add_resource(Camera{
 			eye    : [0.0, 0.0, 1.0].into(),
 			proj   : Projection::orthographic(
@@ -28,31 +28,45 @@ impl Ingame{
 }
 impl State for Ingame{
 	fn on_start(&mut self,engine: &mut Engine){
+		use amethyst::assets::formats::textures::*;
 		use futures::Future;
 		use nalgebra::{Vector2,zero};
 		use ncollide::shape::{Cuboid,ShapeHandle2};
 
 		//Generate a square mesh
-		let tex = Texture::from_color_val([1.0 , 1.0 , 1.0 , 1.0]);
-		let mtl = MaterialBuilder::new().with_albedo(tex);
+		let square_mesh = util::load_proc_asset(engine,move |engine|{
+			let square_verts = util::gen_rectangle_glvertices(1.0,1.0);
+			let mesh = Mesh::build(square_verts);
 
-		let square_verts = util::gen_rectangle_glvertices(1.0,1.0);
-		let mesh = Mesh::build(square_verts);
-
-		let square = util::load_proc_asset(engine,move |engine|{
-			let factory = engine.world.read_resource::<Factory>();
-			factory.create_mesh(mesh).map(MeshComponent::new).map_err(
-				BoxedErr::new,
-			)
-		});
-
-		let mtl = util::load_proc_asset(engine,move |engine|{
 			let factory = engine.world.read_resource::<Factory>();
 			factory
-				.create_material(mtl)
+				.create_mesh(mesh)
+				.map(MeshComponent::new)
+				.map_err(BoxedErr::new)
+		});
+		let square_mtl = util::load_proc_asset(engine,move |engine|{
+			let tex = Texture::from_color_val([1.0 , 1.0 , 1.0 , 1.0]);
+
+			let factory = engine.world.read_resource::<Factory>();
+			factory
+				.create_material(MaterialBuilder::new().with_albedo(tex))
 				.map(MaterialComponent)
 				.map_err(BoxedErr::new)
 		});
+
+		//Import an image (TODO)
+		let image_mesh = util::load_proc_asset(engine,move |engine|{
+			let square_verts = util::gen_rectangle_glvertices(16.0,16.0);
+			let mesh = Mesh::build(square_verts);
+
+			let factory = engine.world.read_resource::<Factory>();
+			factory
+				.create_mesh(mesh)
+				.map(MeshComponent::new)
+				.map_err(BoxedErr::new)
+		});
+		let image_mtl = util::load_material(engine,"test",PngFormat);
+
 
 		//Add all resources
 		engine.world.add_resource(data::Score::new());
@@ -67,8 +81,8 @@ impl State for Ingame{
 		//Create a floor
 		{
 			engine.world.create_entity()
-				.with(square.clone())
-				.with(mtl.clone())
+				.with(square_mesh.clone())
+				.with(square_mtl.clone())
 				.with(components::Position(zero()))
 				.with(components::Solid::new(
 					data::SolidType::Solid,
@@ -85,8 +99,8 @@ impl State for Ingame{
 		//Create a floor
 		{
 			engine.world.create_entity()
-				.with(square.clone())
-				.with(mtl.clone())
+				.with(square_mesh.clone())
+				.with(square_mtl.clone())
 				.with(components::Position(Vector2::new(640.0,480.0)))
 				.with(components::Solid::new(
 					data::SolidType::Solid,
@@ -103,8 +117,8 @@ impl State for Ingame{
 		//Create a floor
 		{
 			engine.world.create_entity()
-				.with(square.clone())
-				.with(mtl.clone())
+				.with(square_mesh.clone())
+				.with(square_mtl.clone())
 				.with(components::Position(Vector2::new(200.0,400.0)))
 				.with(components::Solid::new(
 					data::SolidType::Solid,
@@ -121,8 +135,8 @@ impl State for Ingame{
 		//Create a slippery floor
 		{
 			engine.world.create_entity()
-				.with(square.clone())
-				.with(mtl.clone())
+				.with(square_mesh.clone())
+				.with(square_mtl.clone())
 				.with(components::Position(Vector2::new(420.0,360.0)))
 				.with(components::Solid::new(
 					data::SolidType::Solid,
@@ -139,8 +153,8 @@ impl State for Ingame{
 		//Create player
 		{
 			engine.world.create_entity()
-				.with(square.clone())
-				.with(mtl.clone())
+				.with(square_mesh.clone())
+				.with(square_mtl.clone())
 				.with(components::Player{id: 0})
 				.with(components::Position(Vector2::new(500.0,100.0)))
 				.with(components::CollisionCache::new())
@@ -159,8 +173,8 @@ impl State for Ingame{
 		//Create player
 		{
 			engine.world.create_entity()
-				.with(square.clone())
-				.with(mtl.clone())
+				.with(square_mesh.clone())
+				.with(square_mtl.clone())
 				.with(components::Player{id: 1})
 				.with(components::Position(Vector2::new(600.0,100.0)))
 				.with(components::CollisionCache::new())
@@ -226,6 +240,15 @@ impl State for Ingame{
 							camera_data.clone()
 						};
 						Self::update_camera(engine,data);
+						Trans::None
+					},
+
+					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::R),state: Pressed,..},..} => {
+						/* TODO: How to restart the game? Seems like Application::build adds some extra resources
+						use amethyst::ecs::World;
+						engine.world = World::new();
+						Trans::Switch(Box::new(states::Ingame))
+						*/
 						Trans::None
 					},
 

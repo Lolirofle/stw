@@ -1,9 +1,8 @@
 pub mod ingame{
 	use alga::general::AbstractModule;
-	use amethyst::ecs::{Join,System};
 	use amethyst::ecs::transform::LocalTransform;
-	use amethyst::ecs;
 	use amethyst::ecs::input::InputHandler;
+	use amethyst::ecs::{self,Join,System};
 	use amethyst::timing::Time;
 	use std::ops::Deref;
 
@@ -20,8 +19,8 @@ pub mod ingame{
 
 		fn run(&mut self,(mut collisions,mut players,collision_caches,input): Self::SystemData){
 			use amethyst::event::VirtualKeyCode;
-			use amethyst_input::ButtonState::*;
-			use amethyst_input::ChangeState::*;
+			use amethyst::input::ButtonState::*;
+			use amethyst::input::ChangeState::*;
 
 			for(
 				ref mut player,
@@ -36,7 +35,7 @@ pub mod ingame{
 					0 =>{
 						if input.key_is(VirtualKeyCode::Up,Pressed(ThisFrame)){
 							if position_resolve[1] < 0.0{
-								velocity[1] = -340.0;
+								velocity[1] = -420.0;
 							}
 						}
 						if input.key_is(VirtualKeyCode::Left,Pressed(Currently)){
@@ -49,7 +48,7 @@ pub mod ingame{
 					1 =>{
 						if input.key_is(VirtualKeyCode::W,Pressed(ThisFrame)){
 							if position_resolve[1] < 0.0{
-								velocity[1] = -340.0;
+								velocity[1] = -420.0;
 							}
 						}
 						if input.key_is(VirtualKeyCode::A,Pressed(Currently)){
@@ -103,6 +102,7 @@ pub mod ingame{
 	pub struct Physics;
 	impl Physics{
 		pub const AIR_FRICTION: f64 = 20.0; //pixels/seconds^2
+		pub const GRAVITY: f64 = 600.0;
 
 		#[inline(always)]
 		pub fn new() -> Self{Physics}
@@ -130,7 +130,7 @@ pub mod ingame{
 			).join(){
 				//Update acceleration with gravity
 				if gravity{
-					acceleration[1]+= 400.0;
+					acceleration[1]+= Self::GRAVITY;
 				}
 
 				*old_position = *position;
@@ -182,15 +182,27 @@ pub mod ingame{
 							other_shape.deref(),
 							0.0
 						){
-							//Friction (Solid)
-							*friction_total+= this_friction + other_friction;
+							if contact.depth != 0.0{
+								//Friction (Solid)
+								*friction_total+= this_friction + other_friction;
 
-							//Combine with other possible collision resolvements
-							//Subtracts the velocity projected on the contact normal (TODO: Stops when moving towards edge while falling/jumping)
-							*velocity_resolve+= -dot(&(*this_vel - *other_vel),&contact.normal)*contact.normal;
-							//Subtracts the position by the contact depth.
-							//Both object tries to resolve the contact, and how much each of them resolves depends on the ratio of how much each contributed to the contact based on the velocity (TODO: Not really. It just uses their velocities instead of checking how much it contributed to the contact. Is this noticeable? Maybe it differs when changing the time step?)
-							*position_resolve+= -contact.normal.multiply_by((this_vel.norm_squared()/(this_vel.norm_squared()+other_vel.norm_squared()) * contact.depth).abs());
+								//Combine with other possible collision resolvements
+								//Subtracts the velocity projected on the contact normal (TODO: Stops when moving towards edge while falling/jumping)
+								*velocity_resolve+= -dot(&(*this_vel - *other_vel),&contact.normal)*contact.normal;
+								//Subtracts the position by the contact depth.
+								//Both object tries to resolve the contact, and how much each of them resolves depends on the ratio of how much each contributed to the contact based on the velocity (TODO: Not really. It just uses their velocities instead of checking how much it contributed to the contact. Is this noticeable? Maybe it differs when changing the time step?)
+								//TODO: Falls into the ground when one player stands on another and the below one walks. This is noticable especially when walking towards a wall. It is probably the "how much each resolves" that are responsible.
+								let k = {
+									let this_projected  = dot(this_vel,&contact.normal).abs();
+									let other_projected = dot(other_vel,&contact.normal).abs();
+									if this_projected==0.0 && other_projected==0.0{
+										1.0
+									}else{
+										this_projected / (this_projected + other_projected)
+									}
+								};
+								*position_resolve+= -contact.normal.multiply_by((k * contact.depth).abs());
+							}
 						}
 					}
 				}
