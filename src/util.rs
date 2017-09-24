@@ -42,15 +42,11 @@ pub fn gen_rectangle_glvertices(w: f32,h: f32) -> Vec<PosNormTex>{
 
 pub fn vector_lengthen(v: Vector2<f64>,x: f64) -> Vector2<f64>{
 	use alga::general::AbstractModule;
+	use nalgebra::zero;
 
-	let norm2 = v.norm_squared();
-	if norm2 == 0.0{return v;} //Avoid division by 0 in v.normalize()
-
-	let x2 = x*x;
-
-	if norm2 < x2{
-		//Prevent switching signs when lengthening
-		Vector2::new(0.0,0.0)
+	if v.norm_squared() <= x*x{
+		//Prevent switching signs when lengthening and avoids division by 0 in v.normalize()
+		zero()
 	}else{
 		//Add/remove to the length
 		v + v.normalize().multiply_by(x)

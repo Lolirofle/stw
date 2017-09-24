@@ -1,4 +1,5 @@
 pub mod ingame{
+	use alga::general::AbstractModule;
 	use amethyst::ecs::{Join,System};
 	use amethyst::ecs::transform::LocalTransform;
 	use amethyst::ecs;
@@ -107,135 +108,100 @@ pub mod ingame{
 			ecs::Fetch<'a,Time>
 		);
 		fn run(&mut self,(mut collision_caches,mut positions,mut solids,time) : Self::SystemData){
-			use alga::general::AbstractModule;
-			use nalgebra::{Isometry2,Vector2,dot,zero};
-
+			use nalgebra::{Isometry2,dot,zero};
 			use util;
 
 			let delta_time = time.delta_time.subsec_nanos() as f64 / 1.0e9;
 
-			//Step movement (using something like Velocity Verlet Integration), and process collision checking
+			//Step movement (using something like Velocity Verlet Integration)
 			for(
-				&components::Position(position),
-				&components::Solid{mut velocity,mut acceleration,gravity,ref shape,check_movement,..},
-				&mut components::CollisionCache{ref mut new_position,ref mut new_velocity,..},
+				&mut components::Position(ref mut position),
+				&mut components::Solid{ref mut velocity,ref mut acceleration,ref mut old_position,ref mut old_velocity,ref mut old_acceleration,gravity,..},
+			) in (
+				&mut positions,
+				&mut solids,
+			).join(){
+				//Update acceleration with gravity
+				if gravity{
+					acceleration[1]+= 400.0;
+				}
+
+				*old_position = *position;
+				*position+= velocity.multiply_by(delta_time) + acceleration.multiply_by(delta_time*delta_time / 2.0)
+				;
+
+				*old_velocity = *velocity;
+				*velocity+= (*acceleration + *old_acceleration).multiply_by(delta_time / 2.0);
+
+				*old_acceleration = *acceleration;
+				*acceleration = zero();
+			}
+
+			//Process collision checking
+			for(
+				&components::Position(this_pos),
+				&components::Solid{velocity: this_vel,shape: ref this_shape,check_movement,..},
+				&mut components::CollisionCache{ref mut position_resolve,ref mut velocity_resolve,ref mut friction_total,..},
 			) in (
 				&positions,
 				&solids,
 				&mut collision_caches,
 			).join(){
-				//Check acceleration with gravity (TODO: repeating gravity below)
-				if gravity{
-					acceleration[1]+= 400.0;
-				}
+				//Reset the resolvement data
+				*position_resolve = zero();
+				*velocity_resolve = zero();
+				*friction_total   = zero();
 
-				//The new position it should land on if there are no collisions
-				#[inline]
-				fn calc_new_position(position: Vector2<f64>,velocity: Vector2<f64>,acceleration: Vector2<f64>,delta_time: f64) -> Vector2<f64>{
-					position + velocity.multiply_by(delta_time) + acceleration.multiply_by(delta_time*delta_time / 2.0)
-				}
-				let maybe_new_position = calc_new_position(position,velocity,acceleration,delta_time);
-
-				//Check for every existing object
-				for(
-					&components::Position(position2),
-					&components::Solid{friction,velocity: velocity2,acceleration: acceleration2,shape: ref shape2,..},
-				) in (
-					&positions,
-					&solids,
-				).join(){
-					//Skip collision with itself
-					if (shape as *const _)==(shape2 as *const _){
-						continue;
-					}
-
-					//If this is not a static object (no collision checking) and it made contact to something
-					if let (true,Some(contact)) = (check_movement,::ncollide::query::contact(
-						&Isometry2::new(maybe_new_position,zero()),
-						shape.deref(),
-						&Isometry2::new(calc_new_position(position2,velocity2,acceleration2,delta_time),zero()),
-						shape2.deref(),
-						0.0
-					)){
-						//Friction (Solid)
-						velocity = util::vector_lengthen(velocity,-friction*delta_time); //TODO: Should this be included in the integration below? How? By introducing a new variable in CollisionCache which could be called tmp_acceleration that will be calculated in beforehand here?
-
-						//Join with other possible collision resolvements
-						//TODO: This is a temporary fix. Also join position resolvements. The effect/bug can be seen when leaning against one solid while falling onto another one (The velocity will slow down before reaching the ground). To get the general feel of the problem, remove the following code block and one will fall through the ground instead.
-						/*if let &mut Some(new_velocity) = new_velocity{
-							velocity = new_velocity;
-						}*/
-
-						//Set the values "to be changed".
-						//Resolve the collision so that it does not move into the insides of a solid
-						//*new_position = Some(maybe_new_position - contact.normal.multiply_by(contact.depth.abs()));
-						//*new_velocity = Some(velocity - dot(&velocity,&contact.normal)*contact.normal);
-
-						// This code is a shitshow. Basically, only change by the lowest value, merge x and y channels separately.
-						// Any nice matrix operations for this?
-						let mut new_vel = velocity - dot(&velocity,&contact.normal)*contact.normal;
-						if let &mut Some(new_velocity) = new_velocity{
-							new_vel[0] = if new_velocity[0].abs() < new_vel[0].abs(){new_velocity[0]}else{new_vel[0]};
-							new_vel[1] = if new_velocity[1].abs() < new_vel[1].abs(){new_velocity[1]}else{new_vel[1]};
+				//If this is not a static object (no collision checking)
+				if check_movement{
+					//Check for every other existing object
+					for(
+						&components::Position(other_pos),
+						&components::Solid{friction,shape: ref other_shape,..},
+					) in (
+						&positions,
+						&solids,
+					).join(){
+						//Skip collision with itself
+						if (this_shape as *const _)==(other_shape as *const _){
+							continue;
 						}
 
-						let mut new_pos = calc_new_position(position,velocity,acceleration,delta_time) - contact.normal.multiply_by(contact.depth.abs());
-						if let &mut Some(new_position) = new_position{
-							let old_offset = new_position - position;
-							let mut new_offset = new_pos - position;
-							new_offset[0] = if old_offset[0].abs() < new_offset[0].abs(){old_offset[0]}else{new_offset[0]};
-							new_offset[1] = if old_offset[1].abs() < new_offset[1].abs(){old_offset[1]}else{new_offset[1]};
-							new_pos = new_offset + position;
+						//If it made contact to something
+						if let Some(contact) = ::ncollide::query::contact(
+							&Isometry2::new(this_pos,zero()),
+							this_shape.deref(),
+							&Isometry2::new(other_pos,zero()),
+							other_shape.deref(),
+							0.0
+						){
+							//Friction (Solid)
+							*friction_total+= friction;
+
+							//Combine with other possible collision resolvements
+							*velocity_resolve-= dot(&this_vel,&contact.normal)*contact.normal;
+							*position_resolve-= contact.normal.multiply_by(contact.depth.abs());
 						}
-						*new_velocity = Some(new_vel);
-						*new_position = Some(new_pos);
 					}
-				}
-
-				//If there are no collisions
-				if let &mut None = new_velocity{
-					//Friction (Air)
-					velocity = util::vector_lengthen(velocity,-Self::AIR_FRICTION*delta_time);
-
-					//Set the values "to be changed"
-					//It can move according to plan
-					*new_position = Some(maybe_new_position);
-					*new_velocity = Some(velocity);
 				}
 			}
 
-			//Change the variables for real: Positions after collision checking, and velocities from acceleration
+			//Apply resolvement from collision checking
 			for(
 				&mut components::Position(ref mut position),
-				&mut components::Solid{ref mut velocity,mut acceleration,gravity,..},
-				&mut components::CollisionCache{ref mut new_position,ref mut new_velocity,ref mut old_acceleration,..},
+				&mut components::Solid{ref mut velocity,..},
+				&mut components::CollisionCache{ref mut position_resolve,ref mut velocity_resolve,ref mut friction_total,..},
 			) in (
 				&mut positions,
 				&mut solids,
 				&mut collision_caches,
 			).join(){
-				//Apply gravity
-				if gravity{
-					acceleration[1]+= 400.0;
-				}
-
-				//Update all positions
-				if let &mut Some(ref mut new_position) = new_position{
-					*position = *new_position;
-				}
-				*new_position = None;
-
-				//Update all velocities
-				if let &mut Some(ref mut new_velocity) = new_velocity{
-					*velocity = *new_velocity + (acceleration + *old_acceleration).multiply_by(delta_time / 2.0);
-				}
-				*new_velocity = None;
-
-				//Set the old acceleration to the current one (preparing for the next step)
-				*old_acceleration = acceleration;
+				*position = *position + *position_resolve;
+				*velocity = util::vector_lengthen(
+					*velocity + *velocity_resolve,
+					-(Self::AIR_FRICTION + *friction_total)*delta_time
+				);
 			}
-
-			//TODO: Collect all collisions, call a collision event function which gives specs::RunArg::fetch as an argument? Consider using the already existing ConctactHandlers (comes with ncollide)?
 		}
 	}
 }

@@ -29,7 +29,7 @@ impl Ingame{
 impl State for Ingame{
 	fn on_start(&mut self,engine: &mut Engine){
 		use futures::Future;
-		use nalgebra::Vector2;
+		use nalgebra::{Vector2,zero};
 		use ncollide::shape::{Cuboid,ShapeHandle2};
 
 		//Generate a square mesh
@@ -69,17 +69,14 @@ impl State for Ingame{
 			engine.world.create_entity()
 				.with(square.clone())
 				.with(mtl.clone())
-				.with(components::Position(Vector2::new(0.0,0.0)))
-				.with(components::CollisionCache::new())
-				.with(components::Solid{
-					typ           : data::SolidType::Solid,
-					friction      : 240.0,
-					velocity      : Vector2::new(0.0,0.0),
-					acceleration  : Vector2::new(0.0,0.0),
-					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(300.0,16.0))),
-					check_movement: false,
-					gravity       : false,
-				})
+				.with(components::Position(zero()))
+				.with(components::Solid::new(
+					data::SolidType::Solid,
+					false,
+					false,
+					240.0,
+					ShapeHandle2::new(Cuboid::new(Vector2::new(300.0,16.0))),
+				))
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
@@ -91,16 +88,13 @@ impl State for Ingame{
 				.with(square.clone())
 				.with(mtl.clone())
 				.with(components::Position(Vector2::new(640.0,480.0)))
-				.with(components::CollisionCache::new())
-				.with(components::Solid{
-					typ           : data::SolidType::Solid,
-					friction      : 240.0,
-					velocity      : Vector2::new(0.0,0.0),
-					acceleration  : Vector2::new(0.0,0.0),
-					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0,16.0))),
-					check_movement: false,
-					gravity       : false,
-				})
+				.with(components::Solid::new(
+					data::SolidType::Solid,
+					false,
+					false,
+					240.0,
+					ShapeHandle2::new(Cuboid::new(Vector2::new(150.0,16.0))),
+				))
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
@@ -112,16 +106,13 @@ impl State for Ingame{
 				.with(square.clone())
 				.with(mtl.clone())
 				.with(components::Position(Vector2::new(200.0,400.0)))
-				.with(components::CollisionCache::new())
-				.with(components::Solid{
-					typ           : data::SolidType::Solid,
-					friction      : 240.0,
-					velocity      : Vector2::new(0.0,0.0),
-					acceleration  : Vector2::new(0.0,0.0),
-					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(150.0,16.0))),
-					check_movement: false,
-					gravity       : false,
-				})
+				.with(components::Solid::new(
+					data::SolidType::Solid,
+					false,
+					false,
+					240.0,
+					ShapeHandle2::new(Cuboid::new(Vector2::new(150.0,16.0))),
+				))
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
@@ -133,16 +124,13 @@ impl State for Ingame{
 				.with(square.clone())
 				.with(mtl.clone())
 				.with(components::Position(Vector2::new(420.0,360.0)))
-				.with(components::CollisionCache::new())
-				.with(components::Solid{
-					typ           : data::SolidType::Solid,
-					friction      : 60.0,
-					velocity      : Vector2::new(0.0,0.0),
-					acceleration  : Vector2::new(0.0,0.0),
-					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(100.0,16.0))),
-					check_movement: false,
-					gravity       : false,
-				})
+				.with(components::Solid::new(
+					data::SolidType::Solid,
+					false,
+					false,
+					30.0,
+					ShapeHandle2::new(Cuboid::new(Vector2::new(100.0,16.0))),
+				))
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
@@ -156,19 +144,37 @@ impl State for Ingame{
 				.with(components::Player{id: 0})
 				.with(components::Position(Vector2::new(500.0,100.0)))
 				.with(components::CollisionCache::new())
-				.with(components::Solid{
-					typ           : data::SolidType::Solid,
-					friction      : 1000.0,
-					velocity      : Vector2::new(10.0,10.0),
-					acceleration  : Vector2::new(0.0,0.0),
-					shape         : ShapeHandle2::new(Cuboid::new(Vector2::new(16.0,32.0))),
-					check_movement: true,
-					gravity       : true,
-				})
+				.with(components::Solid::new(
+					data::SolidType::Solid,
+					true,
+					true,
+					1000.0,
+					ShapeHandle2::new(Cuboid::new(Vector2::new(16.0,32.0))),
+				))
 				.with(LocalTransform::default())
 				.with(Transform::default())
 				.build();
 		}
+
+		//Create player
+		/*{
+			engine.world.create_entity()
+				.with(square.clone())
+				.with(mtl.clone())
+				.with(components::Player{id: 1})
+				.with(components::Position(Vector2::new(600.0,100.0)))
+				.with(components::CollisionCache::new())
+				.with(components::Solid::new(
+					data::SolidType::Solid,
+					true,
+					true,
+					4000.0,
+					ShapeHandle2::new(Cuboid::new(Vector2::new(16.0,32.0))),
+				))
+				.with(LocalTransform::default())
+				.with(Transform::default())
+				.build();
+		}*/
 	}
 
 	fn handle_event(&mut self,engine : &mut Engine,event: Event) -> Trans{
@@ -183,7 +189,7 @@ impl State for Ingame{
 					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::Return),state: Pressed,..},..} =>
 						Trans::Push(Box::new(states::Pause)),
 
-					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::W),state: Pressed,..},..} => {
+					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::Home),state: Pressed,..},..} => {
 						let data = {
 							let mut camera_data = engine.world.write_resource::<data::Camera>();
 							camera_data.translate.y-= 16.0;
@@ -193,7 +199,7 @@ impl State for Ingame{
 						Trans::None
 					},
 
-					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::S),state: Pressed,..},..} => {
+					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::End),state: Pressed,..},..} => {
 						let data = {
 							let mut camera_data = engine.world.write_resource::<data::Camera>();
 							camera_data.translate.y+= 16.0;
@@ -203,7 +209,7 @@ impl State for Ingame{
 						Trans::None
 					},
 
-					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::A),state: Pressed,..},..} => {
+					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::Delete),state: Pressed,..},..} => {
 						let data = {
 							let mut camera_data = engine.world.write_resource::<data::Camera>();
 							camera_data.translate.x-= 16.0;
@@ -213,7 +219,7 @@ impl State for Ingame{
 						Trans::None
 					},
 
-					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::D),state: Pressed,..},..} => {
+					WindowEvent::KeyboardInput{input: KeyboardInput{ virtual_keycode: Some(VirtualKeyCode::PageDown),state: Pressed,..},..} => {
 						let data = {
 							let mut camera_data = engine.world.write_resource::<data::Camera>();
 							camera_data.translate.x+= 16.0;
