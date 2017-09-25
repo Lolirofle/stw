@@ -24,7 +24,7 @@ pub mod ingame{
 
 			for(
 				ref mut player,
-				&mut components::Solid{ref mut velocity,..},
+				&mut components::Solid{ref mut velocity,ref mut acceleration,..},
 				&components::CollisionCache{ref position_resolve,..},
 			) in (
 				&mut players,
@@ -34,28 +34,34 @@ pub mod ingame{
 				match player.id{
 					0 =>{
 						if input.key_is(VirtualKeyCode::Up,Pressed(ThisFrame)){
+							//If on ground
 							if position_resolve[1] < 0.0{
 								velocity[1] = -420.0;
 							}
 						}
 						if input.key_is(VirtualKeyCode::Left,Pressed(Currently)){
-							velocity[0] = -100.0;
+							if velocity[0] > -100.0{
+								acceleration[0]-= 1200.0;
+							}
 						}
 						if input.key_is(VirtualKeyCode::Right,Pressed(Currently)){
-							velocity[0] = 100.0;
+							if velocity[0] < 100.0{
+								acceleration[0]+= 1200.0;
+							}
 						}
 					}
 					1 =>{
 						if input.key_is(VirtualKeyCode::W,Pressed(ThisFrame)){
+							//If on ground
 							if position_resolve[1] < 0.0{
 								velocity[1] = -420.0;
 							}
 						}
 						if input.key_is(VirtualKeyCode::A,Pressed(Currently)){
-							velocity[0] = -100.0;
+							velocity[0] = velocity[0].min(-100.0);
 						}
 						if input.key_is(VirtualKeyCode::D,Pressed(Currently)){
-							velocity[0] = 100.0;
+							velocity[0] = velocity[0].max(100.0);
 						}
 					}
 					_ => {}
@@ -203,6 +209,7 @@ pub mod ingame{
 								};
 								*position_resolve+= -contact.normal.multiply_by((k * contact.depth).abs());
 
+								//Touching moving solids that do not have collision checking
 								if !other_check_movement{
 									*position_resolve+= other_pos - other_old_pos;
 								}
